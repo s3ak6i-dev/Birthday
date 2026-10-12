@@ -40,3 +40,7 @@ packages/shared/src/scenes/compiled/
 # Logs
 *.log
 npm-debug.log*
+
+# Python bytecode cache (scripts/trace-hotspots.py's venv)
+__pycache__/
+*.pyc
