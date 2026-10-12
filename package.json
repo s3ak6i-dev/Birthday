@@ -1,0 +1,16 @@
+{
+  "name": "dr-chandras-waiting-room",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Dr. Chandra's Waiting Room - a private, two-player doctor-themed game site, see masterdoc.md",
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev:web": "npm run dev -w @ward-games/web",
+    "dev:rooms": "npm run dev -w @ward-games/rooms",
+    "build:web": "npm run build -w @ward-games/web",
+    "deploy:rooms": "npm run deploy -w @ward-games/rooms",
+    "validate-content": "npm run validate-content -w @ward-games/content",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
+  }
+}

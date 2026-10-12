@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+*.tsbuildinfo
+
+# Env / secrets (see masterdoc.md section 12.2 - never commit real values)
+.env
+.env.local
+.env.*.local
+.dev.vars
+
+# Cloudflare
+.wrangler/
+
+# Throwaway Python env for scripts/trace-hotspots.py (opencv/numpy/pillow) -
+# see scripts/requirements.txt to recreate it.
+.tools-venv/
+
+# Generated art (source is large/WIP; export/ is what actually ships)
+art/source/*
+!art/source/.gitkeep
+
+# Compiled Ink scenes (generated at build time, section 4.8)
+packages/shared/src/scenes/compiled/
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Logs
+*.log
+npm-debug.log*

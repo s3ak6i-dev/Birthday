@@ -1,0 +1,7 @@
+# For scripts/trace-hotspots.py. Recreate the venv with:
+#   py -m venv .tools-venv
+#   .tools-venv/Scripts/pip install -r scripts/requirements.txt   (Windows)
+#   .tools-venv/bin/pip install -r scripts/requirements.txt       (macOS/Linux)
+opencv-python-headless
+numpy
+pillow

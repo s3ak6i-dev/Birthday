@@ -1,0 +1,20 @@
+name = "ward-games-rooms"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+compatibility_flags = ["nodejs_compat"]
+
+# One Durable Object per live room (masterdoc.md section 4.6).
+[[durable_objects.bindings]]
+name = "WARD_ROOM"
+class_name = "WardRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["WardRoom"]
+
+# No secrets needed here - JWT verification uses Supabase's public JWKS
+# endpoint (jwt.ts), not a shared secret. See masterdoc.md section 12.2 for
+# the full environment variable table.
+[vars]
+ALLOWED_ORIGIN = "http://localhost:5173"
+SUPABASE_URL = "https://lyappvibyxgtcnqravog.supabase.co"

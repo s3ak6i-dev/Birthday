@@ -1,0 +1,4 @@
+# No secrets needed here anymore - JWT verification uses Supabase's public
+# JWKS endpoint (src/jwt.ts), not a shared secret, so SUPABASE_URL lives in
+# wrangler.toml's plain [vars] instead (see masterdoc.md section 12.2).
+# This file is kept as a placeholder for whenever a real secret IS needed.

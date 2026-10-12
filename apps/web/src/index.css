@@ -1,0 +1,146 @@
+/* Base styles. See masterdoc.md section 2.1 (typography/layout) - the
+   leftover Vite template styling (fixed-width #root, docs-page look) has
+   been stripped since it fought the full-bleed Lounge layout. */
+
+:root {
+  color-scheme: dark;
+  font-family: "Pixelify Sans", ui-monospace, Consolas, monospace;
+  font-size: 16px; /* FR-110 minimum body size on phones */
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #14101f; /* palette.ink, see packages/ui/src/tokens.ts */
+  color: #ffffff;
+}
+
+#root {
+  min-height: 100svh;
+}
+
+img {
+  image-rendering: pixelated;
+}
+
+/* Hotspot hover/focus affordance - see packages/ui/src/components/Hotspot.tsx.
+   Each Hotspot renders a button (hit area) immediately followed by its
+   outline <svg> sibling, so a plain adjacent-sibling selector can reveal
+   the traced-silhouette polygon on hover/focus without any JS state. */
+.ward-hotspot-outline polygon {
+  opacity: 0;
+  transition: opacity 150ms ease;
+  filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.95)) drop-shadow(0 0 8px rgba(255, 255, 255, 0.7))
+    drop-shadow(0 0 18px rgba(255, 255, 255, 0.5));
+}
+
+.ward-hotspot:not(:disabled):hover + .ward-hotspot-outline polygon,
+.ward-hotspot:not(:disabled):focus-visible + .ward-hotspot-outline polygon {
+  opacity: 1;
+}
+
+/* Fallback for any hotspot that doesn't have a traced outline yet - a
+   plain rounded-rect glow instead of a shape-hugging one. */
+.ward-hotspot:not(.ward-hotspot--traced):not(:disabled):hover,
+.ward-hotspot:not(.ward-hotspot--traced):not(:disabled):focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.85);
+  outline-offset: -2px;
+  border-radius: 10px;
+  box-shadow: 0 0 16px 2px rgba(255, 255, 255, 0.35);
+}
+
+.ward-hotspot:disabled {
+  outline: none;
+  box-shadow: none;
+}
+
+/* Ambient window light - see packages/ui/src/components/WindowLight.tsx.
+   A slow drift + opacity pulse, like a cloud passing outside. Respects
+   reduced motion (section 2.8) by freezing on a static mid-point frame
+   rather than disappearing - it should still read as "light," just still. */
+@keyframes ward-light-drift {
+  0% {
+    transform: translate(-3%, 0) scale(0.96);
+    opacity: 0.55;
+  }
+  50% {
+    transform: translate(2%, 1%) scale(1.04);
+    opacity: 0.85;
+  }
+  100% {
+    transform: translate(-3%, 0) scale(0.96);
+    opacity: 0.55;
+  }
+}
+
+.ward-window-light {
+  animation: ward-light-drift 22s ease-in-out infinite;
+}
+
+@keyframes ward-dust-mote {
+  0% {
+    transform: translate(0, 0);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.8;
+  }
+  85% {
+    opacity: 0.6;
+  }
+  100% {
+    transform: translate(var(--mote-drift-x, 10px), -60px);
+    opacity: 0;
+  }
+}
+
+.ward-dust-mote {
+  animation-name: ward-dust-mote;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ward-window-light {
+    animation: none;
+    transform: translate(-0.5%, 0.5%) scale(1);
+    opacity: 0.7;
+  }
+  .ward-dust-mote {
+    display: none;
+  }
+}
+
+/* DialogueScene's per-line illustration card (packages/ui) - a small pop-in
+   each time a new one swaps in, keyed by line so React remounts it and
+   retriggers the animation. */
+@keyframes ward-card-pop {
+  0% {
+    transform: scale(0.85) translateY(6px);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+.ward-dialogue-card {
+  animation: ward-card-pop 220ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ward-dialogue-card {
+    animation: none;
+  }
+}
+
+/* Gate entrance sequence - see apps/web/src/routes/EntranceSequence.tsx.
+   Earlier revisions needed a knock-shake keyframe and a Ken Burns zoom
+   here to fake camera movement across separately-generated art. The
+   current 9-shot sequence is one consistent authored set with real "push
+   in" / "shake" / etc. frames already drawn, so none of that CSS is
+   needed anymore - it's a plain crossfade stack, all in the component. */

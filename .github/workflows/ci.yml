@@ -1,0 +1,22 @@
+name: CI
+
+# See masterdoc.md section 4.9 (content validation pipeline) and FR-CNT-4:
+# "Build fails if content fails schema or solvability checks."
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm install
+      - run: npm run validate-content
+      - run: npm run typecheck

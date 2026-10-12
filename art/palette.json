@@ -1,0 +1,18 @@
+{
+  "_comment": "The locked palette (D3, masterdoc.md section 6.2). Mirrors packages/ui/src/tokens.ts so non-TS tools (scripts/clean-art.mjs, image-editor palette imports) can read it too. Keep both in sync.",
+  "lilacMist": "#DEC9E9",
+  "softLilac": "#DAC3E8",
+  "paleViolet": "#D2B7E5",
+  "white": "#FFFFFF",
+  "lavender": "#C19EE0",
+  "orchid": "#B185DB",
+  "amethyst": "#A06CD5",
+  "deepAmethyst": "#9163CB",
+  "violet": "#815AC0",
+  "deepViolet": "#7251B5",
+  "nightViolet": "#6247AA",
+  "ink": "#14101F",
+  "mint": "#8FE3B0",
+  "butter": "#FFE08A",
+  "coral": "#FF7A7A"
+}

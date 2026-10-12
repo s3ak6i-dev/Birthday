@@ -1,0 +1,21 @@
+{
+  "name": "@ward-games/rooms",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ward-games/shared": "*",
+    "jose": "^6.2.12",
+    "partyserver": "^0.0.66"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241022.0",
+    "typescript": "~6.0.2",
+    "wrangler": "^3.86.1"
+  }
+}
