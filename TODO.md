@@ -60,6 +60,7 @@ tracked.
 
 ## M2 — Must-tier games
 
+- [x] **Games list (S05, `/games`)** — real screen (`GamesList.tsx`), not a placeholder: all 5 games with tagline, live/locked status (the two unbuilt v1.5/v2 games show "Coming soon" and a disabled Play button, same pattern as the Lounge's locked hotspots), and each live game's real win/loss record read straight from `scoreboard` - verified live against the real Supabase project, not mocked. New `lib/game-meta.ts` is the one place game name/tagline/route live now, replacing three slightly-different copies of the same name map that had grown across `WaitingRoom.tsx`, `GameIntro.tsx`, and the old Lounge-only version
 - [x] **Guess the Diagnosis** — engine fully implemented (`packages/shared/src/games/guess-the-diagnosis/engine.ts`, FR-30..39) with 15 passing unit tests (`engine.test.ts`), plus a playable board UI (`apps/web/src/routes/GuessTheDiagnosisBoard.tsx` at `/g/guess-the-diagnosis/play`)
   - this UI is a **local pass-and-play simulation only** (a "Viewing as" toggle stands in for two devices) — the rooms layer doesn't dispatch to engines yet (M1), so real two-device networking for this game is still open
   - uses a placeholder 24-card deck (`guess-the-diagnosis-placeholder-deck.ts`) — NOT real sourced content, swap for the real pack once section 5.4 content is authored
@@ -71,6 +72,7 @@ tracked.
   - the specialty badge icons (corner of each card) were tried and then removed per feedback - a small square-cropped image sitting in the corner of a rounded card frame read as a sharp/clashing box, not the soft look wanted. Assets still exist (`art/export/guess-the-diagnosis-ui/badge-*.png`, removed from `apps/web/public/` as unused) in case a better-integrated treatment is worth revisiting later
   - `PixelButton` (packages/ui) gained a `borderRadius: 8` - was unrounded/sharp-cornered before, called out specifically as not matching the rest of the app's softer look. This is a global change, so it rounds every button app-wide, not just this screen
 - [x] Guess the Diagnosis wired to the real rooms layer (`GuessTheDiagnosisRoomBoard.tsx` - see M1); engine itself was untouched, as expected
+  - **found and fixed a real bug while building the Games/Stats/Album screens below**: the Final Guess confirmation modal (`position: fixed`) had no explicit `z-index`, which meant it was a `z-index: auto` box stacking by DOM order against the board wrapper's `z-index: 1` - the wrapper painted *on top* of the modal, making Confirm genuinely unclickable through normal interaction paths (not just a Playwright artifact - traced it to real CSS stacking rules and reproduced the same missing `z-index` in both `GuessTheDiagnosisRoomBoard.tsx` and the original local-sim `GuessTheDiagnosisBoard.tsx`, since the room version was copied from the local-sim one almost verbatim). Fixed both with `zIndex: 2`. `WaitingRoom.tsx`'s own overlay already had an explicit z-index and wasn't affected; `TriageDialBoard.tsx`/`WordleBoard.tsx` have no `position: fixed` modals at all
 - [ ] Wire Triage Dial and Wordle into the real rooms layer the same way (swap local `useState` dispatch for `useRoom`'s `sendAction`/`gameState` - the engines themselves shouldn't need to change, same as Guess the Diagnosis)
 - [x] **Medical Wordle** — engine for all 3 modes (`packages/shared/src/games/wordle/engine.ts`, FR-50..59) with 26 passing unit tests (66 total across all three engines now), plus a full board UI (`apps/web/src/routes/WordleBoard.tsx`) with a real grid, on-screen+physical keyboard, and a mode-select intro (`WordleIntro.tsx`) with a Daily/Race/Duel picker.
   - this is the one game NOT turn-based - both players solve their own board independently, so (unlike Guess the Diagnosis / Triage Dial) `reduce` never checks "whose turn is it," only "is this your own board and is it still open"
@@ -98,8 +100,11 @@ tracked.
 - [ ] Ink → JSON compile step wired into the build (`inkjs`, section 4.8); only `scenes/triage_intro.ink` exists so far
 - [ ] Scene player (S21): typewriter text, portraits, expression tags, log, skip, choices (FR-80/81)
 - [ ] Write the rest of the scene list (section 2.5/scenes/README.md): `intro`, all five `tut_*`, `rank_up_1..4`, `bond_1..5` — needs mascot/cast decisions first (section 11, items 3-4)
-- [ ] XP/rank/streak/sticker/scoreboard logic wired to real profile/daily_results/scoreboard rows (constants already in `packages/shared/src/config.ts` and `stickers.ts`)
-- [ ] Sticker album screen (S22) and garden view (S43, in Lounge)
+- [x] **Scoreboard writes are real** - `lib/progress.ts`'s `recordGameResult()` is called once per finished game by `GuessTheDiagnosisRoomBoard.tsx` (each connected client writes its own outcome; RLS only allows writing your own row anyway, so there was never a "who writes" race to resolve). Guarded by a ref so a reconnect replaying the same terminal state can't double-count. Draws don't touch the scoreboard. Verified live: played a real two-account game to a genuine win and watched `/stats`, `/games`, and `/album` all update correctly off the real write
+  - **not yet done**: XP/rank, `daily_results`, and `bond` are still untouched - this pass only wired scoreboard + two stickers (see below), not the full progression system
+- [x] **Sticker album screen (S22)** - real screen (`StickerAlbum.tsx`) reading `stickers_unlocked`, all 20 from `packages/shared/src/stickers.ts`. Real art for the 20 icons doesn't exist yet - `lib/sticker-glyphs.ts` maps each `icon` id to a plain emoji as a placeholder, swap that one file for real pixel art later without touching the screen. Unlocks are treated as **shared** (either player triggering one marks it unlocked for both), not per-player, matching the "this is one gift you're building together" framing
+  - **only 2 of the 20 unlock conditions are actually wired** (packages/shared/src/stickers.ts's own TODO - "turn each one into a checkable predicate" - is real, most of these need game events or systems that don't exist yet): "Minor Setback" (lose any live game, written from `GuessTheDiagnosisRoomBoard.tsx` next to the scoreboard write) and "Dog Whisperer" (tap the Ward Dog 10 times, written from `Lounge.tsx` via a `localStorage` tap counter). Both verified live - played a game to a loss and confirmed Minor Setback unlocked; tapped the dog 10 times and confirmed Dog Whisperer unlocked. The other 18 stay honestly locked
+- [ ] Garden view (S43, in Lounge)
 
 ## M4 — Peer Review, settings, polish
 
@@ -111,7 +116,7 @@ tracked.
 ## M5 — v1.5
 
 - [ ] **Code Red** engine (FR-60..69) + Bedside/Protocol split UI (S31/32/33) + 3 scenarios authored and sourced
-- [ ] Stats/scoreboard screen (S34, FR-PRG-3)
+- [x] **Stats/scoreboard screen (S34, FR-PRG-3)** - built ahead of its masterdoc v1.5 tier, alongside the Games list and Sticker Album (see M2/M3). `Stats.tsx` reads `scoreboard` + `profiles`, shows wins/losses/current-streak per player per live game and a champion banner (total wins across all games, or "tied" when equal). New `lib/use-profiles.ts` resolves `user_id` → display name via the `profiles` table (seeded by `scripts/seed-accounts.ts`) rather than hardcoding either account's uuid anywhere. Per-game history and trophies (beyond the scoreboard table itself) are still out of scope for this pass
 - [ ] Cast portraits (Professor, Nurse) and the rest of the v1.5 sticker set
 
 ## M6 — v2

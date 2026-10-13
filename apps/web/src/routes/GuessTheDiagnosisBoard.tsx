@@ -386,6 +386,10 @@ export function GuessTheDiagnosisBoard() {
           style={{
             position: "fixed",
             inset: 0,
+            // See the identical fix's comment in GuessTheDiagnosisRoomBoard.tsx -
+            // without an explicit z-index this painted behind the zIndex:1
+            // board wrapper above and was unclickable.
+            zIndex: 2,
             background: "rgba(0,0,0,0.6)",
             display: "grid",
             placeItems: "center",

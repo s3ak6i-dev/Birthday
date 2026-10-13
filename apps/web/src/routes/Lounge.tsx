@@ -16,15 +16,43 @@
 //  - player sprites standing in the room (needs avatar art, M2/M3)
 //  - Gyna (the owl mascot) perched on the pendant lamp - named, art not
 //    generated yet, see TODO.md
+import { useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnimatedCritter, Hotspot, IconButton, WindowLight } from "@ward-games/ui";
 import { LOUNGE_HOTSPOTS } from "./lounge-hotspots";
+import { unlockSticker } from "../lib/progress";
+import { supabase } from "../lib/supabase";
+
+// "Dog Whisperer" (sticker 13, packages/shared/src/stickers.ts) - tap the
+// Ward Dog 10 times. Lifetime count, not per-visit, so it survives a
+// refresh; not tied to any one game or room, just a browser-local tally
+// until it fires once.
+const DOG_TAP_COUNT_KEY = "ward-games:dog-tap-count";
+const DOG_TAP_STICKER_ID = 13;
 
 // Real pixel-art icons (art/export/icons/), replacing the placeholder SVGs.
 const navIcon = (src: string) => <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />;
 
 export function Lounge() {
   const navigate = useNavigate();
+  const alreadyUnlockedRef = useRef(false);
+
+  function handleDogTap() {
+    if (alreadyUnlockedRef.current) return;
+    let count = 0;
+    try {
+      count = Number(localStorage.getItem(DOG_TAP_COUNT_KEY) ?? "0") + 1;
+      localStorage.setItem(DOG_TAP_COUNT_KEY, String(count));
+    } catch {
+      return; // storage blocked - skip counting rather than unlock on every tap
+    }
+    if (count < 10) return;
+    alreadyUnlockedRef.current = true; // don't re-fire the lookup every tap past 10
+    supabase.auth.getSession().then(({ data }) => {
+      const userId = data.session?.user.id;
+      if (userId) unlockSticker(userId, DOG_TAP_STICKER_ID).catch(() => {});
+    });
+  }
 
   return (
     <main style={{ position: "relative", width: "100%", aspectRatio: "1672 / 941" }}>
@@ -43,12 +71,31 @@ export function Lounge() {
       {/* Ward Dog - full pose-and-cycle sheet, sliced into frames (see
           art/export/ward-dog/). Home position matches where the cat used
           to sit on the sofa; widthPct scales with the art instead of
-          staying a fixed pixel size at every viewport width. */}
+          staying a fixed pixel size at every viewport width.
+
+          Every coordinate below was measured directly against
+          lounge_dusk.png (1672x941) with a percent grid overlaid, not
+          eyeballed - see TODO.md for the measurements and for a second
+          correction made after the first pass: `left`/`top` position the
+          sprite box's TOP-LEFT corner, not its feet, and at widthPct=7 /
+          boxAspect=0.8 that box is ~10% of the stage tall - so every
+          target below is the *measured contact surface's y minus ~10*,
+          not the surface's y directly (verified by screenshotting the
+          actual render, not just trusting the arithmetic - the first
+          pass put the dog standing in front of the ottoman instead of on
+          it). wanderBox stays below every piece of furniture's floor
+          contact line (deepest one measured, the office chair's wheel
+          base, bottoms out around 64%); perch targets the ottoman's own
+          top surface (measured ~52-53%) in front of the sofa. */}
       <AnimatedCritter
         homeLeft={40}
         homeTop={47}
-        wanderBox={{ left: 18, top: 52, width: 55, height: 16 }}
+        landingLeft={40}
+        landingTop={53}
+        wanderBox={{ left: 14, top: 57, width: 70, height: 25 }}
+        perch={{ left: 50, top: 43 }}
         widthPct={7}
+        onTap={handleDogTap}
         frames={{
           asleep: "/ward-dog/asleep.png",
           stretch: "/ward-dog/stretch.png",

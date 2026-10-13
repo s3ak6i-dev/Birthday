@@ -13,13 +13,14 @@
 //
 // Card elimination marks stay local-only UI state per FR-34, same as the
 // pass-and-play version - never part of the synced game state.
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { DialogueScene, PixelButton, palette } from "@ward-games/ui";
 import type { GuessTheDiagnosisAction, GuessTheDiagnosisRedactedState } from "@ward-games/shared";
 import type { RoomHandle } from "../lib/use-room";
 import { GUESS_THE_DIAGNOSIS_TUTORIAL } from "./guess-the-diagnosis-tutorial";
 import { GYNA_PORTRAITS } from "../lib/gyna-portraits";
+import { recordGameResult, unlockSticker } from "../lib/progress";
 
 const TUTORIAL_SEEN_KEY = "ward-games:tutorial-seen:guess-the-diagnosis";
 
@@ -52,6 +53,25 @@ export function GuessTheDiagnosisRoomBoard({
   }
 
   const view = room.gameState as GuessTheDiagnosisRedactedState | null;
+
+  // Each connected client records its own outcome to Supabase once the
+  // game actually ends (lib/progress.ts - RLS only lets a user write their
+  // own scoreboard row anyway). Guarded by a ref, not just the winner
+  // check, because a reconnect replays the same terminal state again and
+  // that must NOT double-count the result. Draws don't touch the
+  // scoreboard - see recordGameResult's doc comment.
+  const recordedResultRef = useRef(false);
+  useEffect(() => {
+    if (!view?.winner || view.winner === "draw" || recordedResultRef.current) return;
+    const selfId = room.selfId;
+    if (!selfId) return;
+    recordedResultRef.current = true;
+    const outcome = view.winner === selfId ? "win" : "loss";
+    recordGameResult(selfId, "guess-the-diagnosis", outcome).catch(() => {});
+    if (outcome === "loss") {
+      unlockSticker(selfId, 7).catch(() => {}); // "Minor Setback" - lose any live game
+    }
+  }, [view?.winner, room.selfId]);
 
   function dispatch(action: GuessTheDiagnosisAction) {
     room.sendAction(action);
@@ -363,6 +383,15 @@ export function GuessTheDiagnosisRoomBoard({
           style={{
             position: "fixed",
             inset: 0,
+            // Without an explicit z-index this is a z-index:auto positioned
+            // box, which stacks by DOM order among same-level boxes rather
+            // than always painting on top - the board wrapper above has
+            // zIndex:1, so without this the modal rendered *behind* it and
+            // was unclickable (found via an automated click, not visible
+            // to the eye in normal use since the mouse still "found" a
+            // card underneath - caught by Playwright refusing to click
+            // through an occluded element).
+            zIndex: 2,
             background: "rgba(0,0,0,0.6)",
             display: "grid",
             placeItems: "center",

@@ -10,13 +10,15 @@ import { TriageDialIntro } from "./routes/TriageDialIntro";
 import { TriageDialBoard } from "./routes/TriageDialBoard";
 import { WordleIntro } from "./routes/WordleIntro";
 import { WordleBoard } from "./routes/WordleBoard";
+import { GamesList } from "./routes/GamesList";
+import { StickerAlbum } from "./routes/StickerAlbum";
+import { Stats } from "./routes/Stats";
 import { Placeholder } from "./routes/Placeholder";
 import { NotFound } from "./routes/NotFound";
 
 // Route list matches the screen inventory in masterdoc.md section 2.2.
-// Only the gate and the Lounge are real so far (M0/M1); /games, /album,
-// /stats, /settings are placeholders so the persistent nav (FR-11) never
-// 404s while those screens are pending - see TODO.md M3/M4.
+// /settings is still a placeholder so the persistent nav (FR-11) never
+// 404s while that screen is pending - see TODO.md M4.
 export default function App() {
   return (
     <BrowserRouter>
@@ -41,9 +43,9 @@ export default function App() {
             not just assumed from the ranking docs. */}
         <Route path="/g/:game/:code" element={<WaitingRoom />} />
         <Route path="/g/:game" element={<GameIntro />} />
-        <Route path="/games" element={<Placeholder title="Games" />} />
-        <Route path="/album" element={<Placeholder title="Sticker Album" />} />
-        <Route path="/stats" element={<Placeholder title="Stats" />} />
+        <Route path="/games" element={<GamesList />} />
+        <Route path="/album" element={<StickerAlbum />} />
+        <Route path="/stats" element={<Stats />} />
         <Route path="/settings" element={<Placeholder title="Settings" />} />
         <Route path="/404" element={<NotFound />} />
         <Route path="*" element={<Navigate to="/404" replace />} />

@@ -7,6 +7,12 @@
 // lying down, sometimes turned away - and eventually heads home to sleep
 // again. See masterdoc.md section 2.6 "small animated details".
 //
+// If `perch` is given (an elevated spot like an ottoman), it'll also
+// sometimes hop up onto it to rest instead of just sitting on the floor,
+// then hop back down later - the same leap animation as the sofa jump,
+// just a shorter trip, and mirrored via CSS when the hop travels leftward
+// since the jump art itself only faces right.
+//
 // Frame set (see TODO.md Art / art/export/ward-dog/) was sliced from full
 // pose-and-cycle sheets, not independently generated frame-by-frame - see
 // scripts/trace-hotspots.py's doc comment for why that matters (art
@@ -53,8 +59,10 @@ export interface AnimatedCritterProps {
   /** Where the jump-down lands - "the base of the sofa." Defaults to straight down from home, at the wander box's top edge, if not given. */
   landingLeft?: number;
   landingTop?: number;
-  /** The % area it's allowed to wander within once it's landed and awake. */
+  /** The % area it's allowed to wander within once it's landed and awake. Must be genuinely open floor - this isn't checked against any art, it's on whoever places it (see Lounge.tsx for how this one was actually measured against the background). */
   wanderBox: WanderBox;
+  /** An elevated spot it can hop up onto to rest - e.g. an ottoman - and later hop back down from. Optional: omit it and the critter just rests on the floor like before. */
+  perch?: { left: number; top: number };
   /** Width as a % of the stage, so it scales with the art instead of staying a fixed pixel size at every viewport width. */
   widthPct?: number;
   boxAspect?: number;
@@ -62,7 +70,7 @@ export interface AnimatedCritterProps {
   label?: string;
 }
 
-type CritterState = "asleep" | "stretching" | "jumping" | "walking" | "resting";
+type CritterState = "asleep" | "stretching" | "jumping" | "walking" | "resting" | "restingOnPerch";
 
 const JUMP_FRAME_MS = 150;
 const WALK_FRAME_MS = 140;
@@ -111,6 +119,7 @@ export function AnimatedCritter({
   landingLeft,
   landingTop,
   wanderBox,
+  perch,
   widthPct = 7,
   boxAspect = 0.8,
   onTap,
@@ -124,6 +133,11 @@ export function AnimatedCritter({
   const [moveMs, setMoveMs] = useState(1000); // must match how long the current position transition actually takes - see walkTo()/jumpDown()
   const [walkFrameIndex, setWalkFrameIndex] = useState(0);
   const [jumpFrameIndex, setJumpFrameIndex] = useState(0);
+  // The jump art (jump-5..8) only faces right - CSS-mirrored when a hop's
+  // net horizontal travel is leftward, the same trick walk-left/walk-right
+  // would otherwise need real separate art for (see the jumping branch of
+  // the style/transform below).
+  const [jumpFacing, setJumpFacing] = useState<"left" | "right">("right");
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Tracks the latest position for the distance/direction calc without
@@ -131,6 +145,15 @@ export function AnimatedCritter({
   // only depends on home/wanderBox identity - see the eslint-disable below).
   const posRef = useRef(pos);
   posRef.current = pos;
+  // Lets the click handler below jump straight into the same wake-up/
+  // wander/hop-down sequence the idle timer would eventually trigger on
+  // its own, without duplicating that sequence - filled in by the effect
+  // each time it (re)runs, read by handleClick via the ref so it's never stale.
+  const triggerRef = useRef<{ wakeUp: () => void; startWandering: () => void; hopDownFromPerch: () => void }>({
+    wakeUp: () => {},
+    startWandering: () => {},
+    hopDownFromPerch: () => {},
+  });
 
   useEffect(() => {
     if (reduced.current) return; // stays asleep at home forever, per reduced-motion rule above
@@ -162,15 +185,26 @@ export function AnimatedCritter({
       schedule(jumpDown, 900);
     }
 
-    function jumpDown() {
-      const land = { left: landingLeft ?? homeLeft, top: landingTop ?? wanderBox.top };
+    // Shared by every vertical hop (the initial sofa leap, and hopping up
+    // onto / down off the perch) - same 4-frame jump cycle either way,
+    // only the start/end position differ. Faces the hop the way it's
+    // actually traveling (mirrored in the render below when leftward),
+    // since the art itself only has a rightward leap.
+    function hopTo(target: { left: number; top: number }, onArrive: () => void) {
+      const dx = target.left - posRef.current.left;
       const frameCount = frames?.jump?.length || 1;
       const ms = frameCount * JUMP_FRAME_MS;
+      setJumpFacing(dx < 0 ? "left" : "right");
       setState("jumping");
       setJumpFrameIndex(0);
       setMoveMs(ms);
-      setPos(land); // the leap's position animation and its frame-cycle run for the same duration, together
-      schedule(startWandering, ms);
+      setPos(target); // the leap's position animation and its frame-cycle run for the same duration, together
+      schedule(onArrive, ms);
+    }
+
+    function jumpDown() {
+      const land = { left: landingLeft ?? homeLeft, top: landingTop ?? wanderBox.top };
+      hopTo(land, startWandering);
     }
 
     function randomSpot() {
@@ -187,21 +221,53 @@ export function AnimatedCritter({
     function pauseAWhile() {
       setRestPoseSrc(undefined); // re-rolled in the effect below from frames.restPoses/back/asleep
       setState("resting");
-      const goHomeNext = Math.random() < 0.4;
-      schedule(goHomeNext ? walkHome : startWandering, randomBetween(3500, 9000));
+      const roll = Math.random();
+      if (roll < 0.3) {
+        schedule(walkHome, randomBetween(3500, 9000));
+      } else if (perch && roll < 0.55) {
+        // ~25% of pauses: hop up onto the perch instead of just sitting on
+        // the floor - real elevated rest spot, not another floor pose.
+        schedule(hopUpToPerch, randomBetween(2000, 5000));
+      } else {
+        schedule(startWandering, randomBetween(3500, 9000));
+      }
+    }
+
+    function hopUpToPerch() {
+      if (!perch) return; // can't happen (only scheduled when perch is set), but keeps TS happy
+      hopTo(perch, restOnPerch);
+    }
+
+    function restOnPerch() {
+      setRestPoseSrc(undefined);
+      setState("restingOnPerch");
+      schedule(hopDownFromPerch, randomBetween(3000, 6000));
+    }
+
+    function hopDownFromPerch() {
+      // Land just beside the perch, not anywhere in wanderBox - hopping
+      // down should read as "off the ottoman onto the floor next to it,"
+      // not a teleport-looking leap clear across the room.
+      const left = Math.min(
+        wanderBox.left + wanderBox.width,
+        Math.max(wanderBox.left, perch!.left + randomBetween(-4, 4))
+      );
+      hopTo({ left, top: wanderBox.top }, startWandering);
     }
 
     function walkHome() {
       walkTo({ left: homeLeft, top: homeTop }, goToSleep);
     }
 
+    triggerRef.current = { wakeUp, startWandering, hopDownFromPerch };
+
     schedule(wakeUp, randomBetween(6000, 15000)); // first wake-up after mount
 
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally only re-runs on home/landing/wander-box identity, not every pos/state change
-  }, [homeLeft, homeTop, landingLeft, landingTop, wanderBox]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally only re-runs on home/landing/wander-box/perch identity, not every pos/state change
+  }, [homeLeft, homeTop, landingLeft, landingTop, wanderBox, perch]);
 
   // Advance through the walk cycle while walking, or the leap sequence
   // while jumping - direction-matched for walking, in authored order for jumping.
@@ -224,9 +290,11 @@ export function AnimatedCritter({
   }, [state, facing]);
 
   // Pick a random rest pose once per arrival (resting is "sticky" for the
-  // whole pause, not reshuffled every render).
+  // whole pause, not reshuffled every render) - same pose pool whether
+  // it's resting on the floor or up on the perch, a sit/lie-down pose
+  // reads fine either way without needing perch-specific art.
   useEffect(() => {
-    if (state !== "resting") return;
+    if (state !== "resting" && state !== "restingOnPerch") return;
     const roll = Math.random();
     if (roll < 0.3 && frames?.asleep) {
       setRestPoseSrc(frames.asleep); // "maybe lying down again" even away from home
@@ -238,8 +306,31 @@ export function AnimatedCritter({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately only re-rolls when entering "resting", not on every frames-prop identity change
   }, [state]);
 
+  // Clicking the dog skips straight to whatever its next move would
+  // eventually be, instead of waiting out the random idle timer: wakes +
+  // leaps down from asleep, wanders off from resting on the floor, hops
+  // down and wanders off from resting on the perch. No-ops while it's
+  // already mid-animation (stretching, jumping, or walking) rather than
+  // cutting that off awkwardly, and respects reduced-motion like every
+  // other movement here.
+  function handleClick() {
+    onTap?.();
+    if (reduced.current) return;
+    if (state === "asleep") {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      triggerRef.current.wakeUp();
+    } else if (state === "resting") {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      triggerRef.current.startWandering();
+    } else if (state === "restingOnPerch") {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      triggerRef.current.hopDownFromPerch();
+    }
+  }
+
   const effectiveState = reduced.current ? "asleep" : state;
-  const lying = effectiveState === "asleep" || (effectiveState === "resting" && restPoseSrc === frames?.asleep);
+  const resting = effectiveState === "resting" || effectiveState === "restingOnPerch";
+  const lying = effectiveState === "asleep" || (resting && restPoseSrc === frames?.asleep);
   const isMoving = effectiveState === "walking" || effectiveState === "jumping";
 
   const frameSrc: string | undefined =
@@ -249,7 +340,7 @@ export function AnimatedCritter({
         ? frames?.stretch
         : effectiveState === "jumping"
           ? frames?.jump?.[jumpFrameIndex]
-          : effectiveState === "resting"
+          : resting
             ? restPoseSrc
             : (facing === "right" ? frames?.walkRight : frames?.walkLeft)?.[walkFrameIndex];
 
@@ -262,18 +353,30 @@ export function AnimatedCritter({
     transition: isMoving
       ? `left ${moveMs}ms linear, top ${moveMs}ms ${effectiveState === "jumping" ? "ease-out" : "linear"}`
       : "left 0.6s ease",
-    cursor: onTap ? "pointer" : undefined,
+    // Always clickable now (wakes/sends it wandering even with no onTap
+    // passed in), so the cursor should say so regardless of that prop.
+    cursor: "pointer",
+  };
+
+  // The jump art only has a rightward leap - mirror it for a leftward hop
+  // instead of needing a second set of jump frames, same visual effect a
+  // real left-facing jump sprite would give.
+  const imgStyle: CSSProperties = {
+    width: "100%",
+    height: "100%",
+    objectFit: "contain",
+    transform: effectiveState === "jumping" && jumpFacing === "left" ? "scaleX(-1)" : undefined,
   };
 
   return (
     <button
       type="button"
       aria-label={label}
-      onClick={onTap}
+      onClick={handleClick}
       style={{ ...style, background: "none", border: "none", padding: 0 }}
     >
       {frameSrc ? (
-        <img src={frameSrc} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+        <img src={frameSrc} alt="" style={imgStyle} />
       ) : (
         <PlaceholderSilhouette pose={lying ? "lying" : "upright"} />
       )}
