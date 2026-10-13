@@ -196,14 +196,18 @@ export function GuessTheDiagnosisRoomBoard({
           <span>Your card: {view.deck.find((c) => c.id === view.ownSecretCardId)?.name}</span>
         </div>
 
-        <div style={{ flex: 1, minHeight: 0, display: "flex", gap: 16, padding: 16 }}>
+        {/* .ward-gtd-body/.ward-gtd-sidebar/.ward-gtd-card-grid (index.css)
+            handle the narrow-viewport layout (stacked column, 3-column
+            card grid) - see the identical comment in
+            GuessTheDiagnosisBoard.tsx for why that's a class, not inline. */}
+        <div className="ward-gtd-body" style={{ flex: 1, minHeight: 0, display: "flex", gap: 16, padding: 16 }}>
           <div style={{ flex: "1 1 60%", minHeight: 0, display: "flex", flexDirection: "column" }}>
             <div
+              className="ward-gtd-card-grid"
               style={{
                 flex: 1,
                 minHeight: 0,
                 display: "grid",
-                gridTemplateColumns: "repeat(6, 1fr)",
                 gridAutoRows: "1fr",
                 gap: 6,
                 overflowY: "auto",
@@ -256,8 +260,8 @@ export function GuessTheDiagnosisRoomBoard({
           </div>
 
           <div
+            className="ward-gtd-sidebar"
             style={{
-              flex: "0 0 320px",
               minHeight: 0,
               display: "flex",
               flexDirection: "column",

@@ -193,15 +193,19 @@ export function GuessTheDiagnosisBoard() {
           <span>Your card: {state.deck.find((c) => c.id === view.ownSecretCardId)?.name}</span>
         </div>
 
-        {/* Body: board on the left, controls+log in a sidebar on the right - fills remaining height, no page scroll */}
-        <div style={{ flex: 1, minHeight: 0, display: "flex", gap: 16, padding: 16 }}>
+        {/* Body: board on the left, controls+log in a sidebar on the right
+            on wide screens; stacks vertically and scrolls on narrow ones
+            (.ward-gtd-body/.ward-gtd-sidebar/.ward-gtd-card-grid in
+            index.css - the responsive parts of this layout can't be
+            inline styles since those can't express a media query). */}
+        <div className="ward-gtd-body" style={{ flex: 1, minHeight: 0, display: "flex", gap: 16, padding: 16 }}>
           <div style={{ flex: "1 1 60%", minHeight: 0, display: "flex", flexDirection: "column" }}>
             <div
+              className="ward-gtd-card-grid"
               style={{
                 flex: 1,
                 minHeight: 0,
                 display: "grid",
-                gridTemplateColumns: "repeat(6, 1fr)",
                 gridAutoRows: "1fr",
                 gap: 6,
                 overflowY: "auto",
@@ -254,8 +258,8 @@ export function GuessTheDiagnosisBoard() {
           </div>
 
           <div
+            className="ward-gtd-sidebar"
             style={{
-              flex: "0 0 320px",
               minHeight: 0,
               display: "flex",
               flexDirection: "column",

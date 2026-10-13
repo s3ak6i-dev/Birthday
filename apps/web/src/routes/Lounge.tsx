@@ -55,111 +55,117 @@ export function Lounge() {
   }
 
   return (
-    <main style={{ position: "relative", width: "100%", aspectRatio: "1672 / 941" }}>
-      <img
-        src="/lounge_dusk.png"
-        alt=""
-        style={{ width: "100%", height: "100%", display: "block", objectFit: "cover" }}
-      />
+    // .ward-lounge-viewport/.ward-lounge-stage (index.css) handle portrait
+    // phones - see that comment for why (a plain crop would hide two of
+    // the three live game hotspots). Landscape/desktop is unaffected,
+    // same width-driven aspect box as before.
+    <div className="ward-lounge-viewport">
+      <main className="ward-lounge-stage">
+        <img
+          src="/lounge_dusk.png"
+          alt=""
+          style={{ width: "100%", height: "100%", display: "block", objectFit: "cover" }}
+        />
 
-      {/* A gentle drift/shimmer layered over the baked-in light beams in
-          lounge_dusk.png now that the art carries the main light shape
-          itself - see masterdoc.md section 2.6 "small animated details".
-          Pure CSS, pointer-events:none so it never blocks a hotspot. */}
-      <WindowLight left={18} top={52} width={68} height={38} />
+        {/* A gentle drift/shimmer layered over the baked-in light beams in
+            lounge_dusk.png now that the art carries the main light shape
+            itself - see masterdoc.md section 2.6 "small animated details".
+            Pure CSS, pointer-events:none so it never blocks a hotspot. */}
+        <WindowLight left={18} top={52} width={68} height={38} />
 
-      {/* Ward Dog - full pose-and-cycle sheet, sliced into frames (see
-          art/export/ward-dog/). Home position matches where the cat used
-          to sit on the sofa; widthPct scales with the art instead of
-          staying a fixed pixel size at every viewport width.
+        {/* Ward Dog - full pose-and-cycle sheet, sliced into frames (see
+            art/export/ward-dog/). Home position matches where the cat used
+            to sit on the sofa; widthPct scales with the art instead of
+            staying a fixed pixel size at every viewport width.
 
-          Every coordinate below was measured directly against
-          lounge_dusk.png (1672x941) with a percent grid overlaid, not
-          eyeballed - see TODO.md for the measurements and for a second
-          correction made after the first pass: `left`/`top` position the
-          sprite box's TOP-LEFT corner, not its feet, and at widthPct=7 /
-          boxAspect=0.8 that box is ~10% of the stage tall - so every
-          target below is the *measured contact surface's y minus ~10*,
-          not the surface's y directly (verified by screenshotting the
-          actual render, not just trusting the arithmetic - the first
-          pass put the dog standing in front of the ottoman instead of on
-          it). wanderBox stays below every piece of furniture's floor
-          contact line (deepest one measured, the office chair's wheel
-          base, bottoms out around 64%); perch targets the ottoman's own
-          top surface (measured ~52-53%) in front of the sofa. */}
-      <AnimatedCritter
-        homeLeft={40}
-        homeTop={47}
-        landingLeft={40}
-        landingTop={53}
-        wanderBox={{ left: 14, top: 57, width: 70, height: 25 }}
-        perch={{ left: 50, top: 43 }}
-        widthPct={7}
-        onTap={handleDogTap}
-        frames={{
-          asleep: "/ward-dog/asleep.png",
-          stretch: "/ward-dog/stretch.png",
-          // Crouch -> launch -> peak airborne -> land - position animates from
-          // the sofa down to the floor in sync with this sequence (AnimatedCritter's jumpDown()).
-          jump: ["/ward-dog/jump-5.png", "/ward-dog/jump-6.png", "/ward-dog/jump-7.png", "/ward-dog/jump-8.png"],
-          back: "/ward-dog/back.png",
-          restPoses: ["/ward-dog/sit-relaxed.png", "/ward-dog/sit-alert.png", "/ward-dog/sit-pant.png"],
-          walkRight: [
-            "/ward-dog/walk-right-1.png",
-            "/ward-dog/walk-right-2.png",
-            "/ward-dog/walk-right-3.png",
-            "/ward-dog/walk-right-4.png",
-            "/ward-dog/walk-right-5.png",
-            "/ward-dog/walk-right-6.png",
-          ],
-          walkLeft: [
-            "/ward-dog/walk-left-1.png",
-            "/ward-dog/walk-left-2.png",
-            "/ward-dog/walk-left-3.png",
-            "/ward-dog/walk-left-4.png",
-            "/ward-dog/walk-left-5.png",
-            "/ward-dog/walk-left-6.png",
-          ],
-        }}
-      />
-
-      {LOUNGE_HOTSPOTS.map((hotspot) => (
-        <Hotspot
-          key={hotspot.id}
-          left={hotspot.left}
-          top={hotspot.top}
-          width={hotspot.width}
-          height={hotspot.height}
-          label={hotspot.label}
-          locked={hotspot.locked}
-          outline={hotspot.outline}
-          onActivate={() => {
-            if (!hotspot.game) return;
-            // Wordle is the one game with its own top-level route per
-            // masterdoc.md S16/S17 (`/wordle`, not `/g/wordle`) - see the
-            // same note in App.tsx.
-            navigate(hotspot.game === "wordle" ? "/wordle" : `/g/${hotspot.game}`);
+            Every coordinate below was measured directly against
+            lounge_dusk.png (1672x941) with a percent grid overlaid, not
+            eyeballed - see TODO.md for the measurements and for a second
+            correction made after the first pass: `left`/`top` position the
+            sprite box's TOP-LEFT corner, not its feet, and at widthPct=7 /
+            boxAspect=0.8 that box is ~10% of the stage tall - so every
+            target below is the *measured contact surface's y minus ~10*,
+            not the surface's y directly (verified by screenshotting the
+            actual render, not just trusting the arithmetic - the first
+            pass put the dog standing in front of the ottoman instead of on
+            it). wanderBox stays below every piece of furniture's floor
+            contact line (deepest one measured, the office chair's wheel
+            base, bottoms out around 64%); perch targets the ottoman's own
+            top surface (measured ~52-53%) in front of the sofa. */}
+        <AnimatedCritter
+          homeLeft={40}
+          homeTop={47}
+          landingLeft={40}
+          landingTop={53}
+          wanderBox={{ left: 14, top: 57, width: 70, height: 25 }}
+          perch={{ left: 50, top: 43 }}
+          widthPct={7}
+          onTap={handleDogTap}
+          frames={{
+            asleep: "/ward-dog/asleep.png",
+            stretch: "/ward-dog/stretch.png",
+            // Crouch -> launch -> peak airborne -> land - position animates from
+            // the sofa down to the floor in sync with this sequence (AnimatedCritter's jumpDown()).
+            jump: ["/ward-dog/jump-5.png", "/ward-dog/jump-6.png", "/ward-dog/jump-7.png", "/ward-dog/jump-8.png"],
+            back: "/ward-dog/back.png",
+            restPoses: ["/ward-dog/sit-relaxed.png", "/ward-dog/sit-alert.png", "/ward-dog/sit-pant.png"],
+            walkRight: [
+              "/ward-dog/walk-right-1.png",
+              "/ward-dog/walk-right-2.png",
+              "/ward-dog/walk-right-3.png",
+              "/ward-dog/walk-right-4.png",
+              "/ward-dog/walk-right-5.png",
+              "/ward-dog/walk-right-6.png",
+            ],
+            walkLeft: [
+              "/ward-dog/walk-left-1.png",
+              "/ward-dog/walk-left-2.png",
+              "/ward-dog/walk-left-3.png",
+              "/ward-dog/walk-left-4.png",
+              "/ward-dog/walk-left-5.png",
+              "/ward-dog/walk-left-6.png",
+            ],
           }}
         />
-      ))}
 
-      {/* Nav, as corner icon clusters - Games/Album/Stats top-left, Settings top-right. */}
-      <div style={{ position: "absolute", left: "2%", top: "2.5%", display: "flex", gap: 8 }}>
-        <IconButton label="Games" onClick={() => navigate("/games")}>
-          {navIcon("/icons/games.png")}
-        </IconButton>
-        <IconButton label="Sticker Album" onClick={() => navigate("/album")}>
-          {navIcon("/icons/album.png")}
-        </IconButton>
-        <IconButton label="Stats" onClick={() => navigate("/stats")}>
-          {navIcon("/icons/stats.png")}
-        </IconButton>
-      </div>
-      <div style={{ position: "absolute", right: "2%", top: "2.5%" }}>
-        <IconButton label="Settings" onClick={() => navigate("/settings")}>
-          {navIcon("/icons/settings.png")}
-        </IconButton>
-      </div>
-    </main>
+        {LOUNGE_HOTSPOTS.map((hotspot) => (
+          <Hotspot
+            key={hotspot.id}
+            left={hotspot.left}
+            top={hotspot.top}
+            width={hotspot.width}
+            height={hotspot.height}
+            label={hotspot.label}
+            locked={hotspot.locked}
+            outline={hotspot.outline}
+            onActivate={() => {
+              if (!hotspot.game) return;
+              // Wordle is the one game with its own top-level route per
+              // masterdoc.md S16/S17 (`/wordle`, not `/g/wordle`) - see the
+              // same note in App.tsx.
+              navigate(hotspot.game === "wordle" ? "/wordle" : `/g/${hotspot.game}`);
+            }}
+          />
+        ))}
+
+        {/* Nav, as corner icon clusters - Games/Album/Stats top-left, Settings top-right. */}
+        <div style={{ position: "absolute", left: "2%", top: "2.5%", display: "flex", gap: 8 }}>
+          <IconButton label="Games" onClick={() => navigate("/games")}>
+            {navIcon("/icons/games.png")}
+          </IconButton>
+          <IconButton label="Sticker Album" onClick={() => navigate("/album")}>
+            {navIcon("/icons/album.png")}
+          </IconButton>
+          <IconButton label="Stats" onClick={() => navigate("/stats")}>
+            {navIcon("/icons/stats.png")}
+          </IconButton>
+        </div>
+        <div style={{ position: "absolute", right: "2%", top: "2.5%" }}>
+          <IconButton label="Settings" onClick={() => navigate("/settings")}>
+            {navIcon("/icons/settings.png")}
+          </IconButton>
+        </div>
+      </main>
+    </div>
   );
 }

@@ -144,3 +144,84 @@ img {
    current 9-shot sequence is one consistent authored set with real "push
    in" / "shake" / etc. frames already drawn, so none of that CSS is
    needed anymore - it's a plain crossfade stack, all in the component. */
+
+/* Guess the Diagnosis board (local-sim and real-room versions both use
+   these same three class names - GuessTheDiagnosisBoard.tsx and
+   GuessTheDiagnosisRoomBoard.tsx). Everything else about these layouts
+   stays as inline styles as usual (see CLAUDE conventions elsewhere in
+   this file); only the properties that actually need to differ by
+   viewport live here, since inline style objects can't express a media
+   query. Found by actually screenshotting the board at 390px wide: the
+   fixed 6-column grid only showed 3 columns before getting clipped, and
+   the 320px-fixed sidebar - which holds the ask/answer box, lifelines,
+   and question log, i.e. the entire controls surface - was pushed
+   off-screen and completely unreachable. Both are gameplay-blocking on a
+   phone, not cosmetic. */
+.ward-gtd-body {
+  flex-direction: row;
+}
+.ward-gtd-sidebar {
+  flex: 0 0 320px;
+}
+.ward-gtd-card-grid {
+  grid-template-columns: repeat(6, 1fr);
+}
+@media (max-width: 820px) {
+  .ward-gtd-body {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .ward-gtd-sidebar {
+    flex: 0 0 auto;
+    width: 100%;
+    /* WaitingRoom.tsx's reaction dock is `position: fixed; bottom: 12px;
+       right: 12px` and was overlapping the question log's last couple of
+       lines on the real-room board (found live, not guessed) - the local-
+       sim board has no reaction dock, so this is just harmless extra
+       whitespace there. */
+    padding-bottom: 64px;
+  }
+  .ward-gtd-card-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Lounge (S04) - see apps/web/src/routes/Lounge.tsx. The scene art is a
+   fixed 1672x941 landscape box with hotspots positioned by percentage of
+   that exact box, so it can't just reflow like a normal page - at full
+   viewport width on a portrait phone it was a ~220px-tall sliver with a
+   huge dead black area below (390px wide / (1672/941) aspect = 219px
+   tall, found by actually screenshotting it, not guessed). A straight
+   "crop to fill the screen" fix was tried and rejected: at a typical
+   phone's aspect ratio the visible slice ends up so narrow it crops out
+   two of the three live game hotspots (whiteboard, radio) entirely, which
+   is worse than the dead-space problem it would fix. Instead: enlarge the
+   stage to a reasonable height on portrait phones and let it pan
+   horizontally (overflow-x auto, native momentum scroll) - every hotspot
+   stays reachable by a swipe, and the initial view is no longer tiny. The
+   percentage-based hotspot/dog math inside .ward-lounge-stage is
+   completely unaffected either way, since it's relative to the stage's
+   own box, not the viewport. */
+.ward-lounge-viewport {
+  width: 100%;
+}
+.ward-lounge-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1672 / 941;
+}
+@media (orientation: portrait) {
+  .ward-lounge-viewport {
+    display: flex;
+    align-items: center;
+    height: 100dvh;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+  .ward-lounge-stage {
+    flex: none;
+    width: auto;
+    height: 70%;
+  }
+}

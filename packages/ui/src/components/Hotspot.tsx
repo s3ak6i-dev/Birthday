@@ -35,6 +35,22 @@ export interface HotspotProps extends HotspotRect {
 }
 
 export function Hotspot({ left, top, width, height, label, locked, outline, onActivate, children }: HotspotProps) {
+  // The "Coming soon" badge below is wider than most hotspot boxes (it's
+  // `white-space: nowrap`), so centering it on hotspots near either edge
+  // of the stage - corkboard at left:1%, door at left:89% - pushed it
+  // straight off the visible stage and clipped by .ward-lounge-stage's
+  // overflow (found on a narrow viewport, but it was really a bug at any
+  // width, just more visible once the stage itself got narrower). Anchor
+  // to whichever edge of the hotspot is further from the stage's own
+  // edge instead of always centering.
+  const nearLeftEdge = left < 15;
+  const nearRightEdge = left + width > 85;
+  const badgeStyle: CSSProperties = nearLeftEdge
+    ? { left: 0 }
+    : nearRightEdge
+      ? { right: 0 }
+      : { left: "50%", transform: "translateX(-50%)" };
+
   const buttonStyle: CSSProperties = {
     position: "absolute",
     left: `${left}%`,
@@ -63,14 +79,13 @@ export function Hotspot({ left, top, width, height, label, locked, outline, onAc
             style={{
               position: "absolute",
               bottom: 4,
-              left: "50%",
-              transform: "translateX(-50%)",
               background: palette.ink,
               color: palette.white,
               fontSize: 10,
               padding: "2px 6px",
               borderRadius: 4,
               whiteSpace: "nowrap",
+              ...badgeStyle,
             }}
           >
             Coming soon
