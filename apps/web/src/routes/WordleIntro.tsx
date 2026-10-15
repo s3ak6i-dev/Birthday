@@ -5,9 +5,10 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { DialogueScene, PixelButton, palette } from "@ward-games/ui";
+import { ROOM, type WordleMode } from "@ward-games/shared";
 import { WORDLE_TUTORIAL } from "./wordle-tutorial";
 import { GYNA_PORTRAITS } from "../lib/gyna-portraits";
-import type { WordleMode } from "@ward-games/shared";
+import { randomRoomCode } from "../lib/room-code";
 
 const MODES: { id: WordleMode; label: string; blurb: string }[] = [
   { id: "daily", label: "Daily", blurb: "One shared word a day. Solve it on your own, compare once you're both done." },
@@ -25,6 +26,7 @@ export function WordleIntro() {
   const navigate = useNavigate();
   const [mode, setMode] = useState<WordleMode>("daily");
   const [showHowToPlay, setShowHowToPlay] = useState(false);
+  const [joinCode, setJoinCode] = useState("");
 
   return (
     <main
@@ -104,12 +106,31 @@ export function WordleIntro() {
           picking are still being written and reviewed (masterdoc.md section 5).
         </p>
 
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <PixelButton onClick={() => navigate(`/wordle/play?mode=${mode}`)}>Play</PixelButton>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+          <PixelButton onClick={() => navigate(`/g/wordle/${randomRoomCode()}?mode=${mode}`)}>Create room</PixelButton>
+          <input
+            value={joinCode}
+            onChange={(e) => setJoinCode(e.target.value.toUpperCase().slice(0, ROOM.codeLength))}
+            placeholder="Room code"
+            style={{ padding: 8, width: 110, textTransform: "uppercase" }}
+          />
+          <PixelButton disabled={joinCode.length !== ROOM.codeLength} onClick={() => navigate(`/g/wordle/${joinCode}`)}>
+            Join room
+          </PixelButton>
           <PixelButton variant="danger" onClick={() => setShowHowToPlay(true)}>
             How to play
           </PixelButton>
         </div>
+        <p style={{ margin: "12px 0 0", fontSize: 12, opacity: 0.7 }}>
+          Or{" "}
+          <button
+            onClick={() => navigate(`/wordle/play?mode=${mode}`)}
+            style={{ background: "none", border: "none", color: palette.white, textDecoration: "underline", cursor: "pointer", padding: 0, font: "inherit" }}
+          >
+            practice solo on this device
+          </button>{" "}
+          (pass-and-play, no partner needed).
+        </p>
       </div>
 
       {showHowToPlay && (

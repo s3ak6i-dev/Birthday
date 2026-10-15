@@ -12,7 +12,7 @@
 //
 // Card elimination marks are local-only UI state per FR-34 (never part of
 // engine state, never synced beyond a remaining-count).
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { DialogueScene, PixelButton, palette } from "@ward-games/ui";
 import {
@@ -23,6 +23,7 @@ import {
 } from "@ward-games/shared";
 import { GUESS_THE_DIAGNOSIS_TUTORIAL } from "./guess-the-diagnosis-tutorial";
 import { GYNA_PORTRAITS } from "../lib/gyna-portraits";
+import { sfxCardSelect, sfxLifeline, sfxWin } from "../lib/sfx";
 
 const P1: PlayerId = "p1";
 const P2: PlayerId = "p2";
@@ -58,6 +59,17 @@ export function GuessTheDiagnosisBoard() {
     }
   }
 
+  // Local pass-and-play has no single "self", so unlike the real room
+  // board there's no win/lose distinction to sound differently - just a
+  // neutral "the round ended" fanfare once, guarded against re-firing on
+  // every re-render while state.winner stays set.
+  const wonSoundPlayedRef = useRef(false);
+  useEffect(() => {
+    if (!state.winner || state.winner === "draw" || wonSoundPlayedRef.current) return;
+    wonSoundPlayedRef.current = true;
+    sfxWin();
+  }, [state.winner]);
+
   const view = useMemo(() => guessTheDiagnosisEngine.redact(state, viewingPlayer), [state, viewingPlayer]);
   const myEliminated = eliminated[viewingPlayer]!;
   const isMyTurn = state.turn === viewingPlayer;
@@ -69,6 +81,7 @@ export function GuessTheDiagnosisBoard() {
   }
 
   function toggleEliminated(cardId: string) {
+    sfxCardSelect();
     setEliminated((prev) => {
       const next = new Set(prev[viewingPlayer]);
       if (next.has(cardId)) next.delete(cardId);
@@ -315,7 +328,7 @@ export function GuessTheDiagnosisBoard() {
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <PixelButton
                 disabled={myLifelines.consult}
-                onClick={() => dispatch({ type: "useConsult" }, viewingPlayer)}
+                onClick={() => { sfxLifeline(); dispatch({ type: "useConsult" }, viewingPlayer); }}
                 style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
               >
                 <img src="/guess-the-diagnosis-ui/icon-consult.png" alt="" style={{ width: 18, height: 18 }} />
@@ -323,7 +336,7 @@ export function GuessTheDiagnosisBoard() {
               </PixelButton>
               <PixelButton
                 disabled={myLifelines.secondOpinion}
-                onClick={() => dispatch({ type: "useSecondOpinion" }, viewingPlayer)}
+                onClick={() => { sfxLifeline(); dispatch({ type: "useSecondOpinion" }, viewingPlayer); }}
                 style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
               >
                 <img src="/guess-the-diagnosis-ui/icon-second-opinion.png" alt="" style={{ width: 18, height: 18 }} />

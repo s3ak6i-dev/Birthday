@@ -95,88 +95,24 @@ export const SCRUB_COLORS: ScrubColorOption[] = [
   },
 ];
 
-export interface AccessoryOption {
-  id: "stethoscope" | "glasses" | "headphones" | "hairAccessory" | "backpackCharm";
-  label: string;
-  image: string;
-  /** Position as a percentage box relative to the character sprite's own
-   * bounding box, per character (their proportions differ). These are
-   * verified, not eyeballed blind: each one was checked by actually
-   * compositing the accessory onto the real sprite in Python and looking
-   * at the result before being written here - see TODO.md for why the
-   * first pass of these numbers (pure percentage guessing from a gridline
-   * overlay, no compositing check) came out visibly wrong. Re-verified a
-   * second time when the base scrubs art itself was replaced (individually
-   * generated and properly body-centered, instead of split out of a
-   * combined two-person scene) - different crop, different percentages. */
-  position: Record<CharacterId, { left: string; top: string; width: string }>;
-}
-
-export const ACCESSORIES: AccessoryOption[] = [
-  {
-    id: "stethoscope",
-    label: "Stethoscope",
-    image: "/avatar-accessories/stethoscope.png",
-    position: {
-      lakshmi: { left: "35%", top: "26%", width: "30%" },
-      surya: { left: "24%", top: "25%", width: "30%" },
-    },
-  },
-  {
-    id: "glasses",
-    label: "Glasses",
-    image: "/avatar-accessories/glasses.png",
-    position: {
-      lakshmi: { left: "26%", top: "14.5%", width: "43%" },
-      surya: { left: "22%", top: "11%", width: "40%" },
-    },
-  },
-  {
-    id: "headphones",
-    label: "Headphones",
-    image: "/avatar-accessories/headphones.png",
-    // Generated as classic over-ear headphones (band + two cups), which
-    // reads as "worn on the head" - placed there, it swallowed the whole
-    // face at any width large enough to look right (see TODO.md). The
-    // source prompt actually asked for them "resting around a neck," so
-    // this positions them in the same neck/chest zone as the stethoscope
-    // instead - the band arcs across the collar, cups hang on the chest.
-    position: {
-      lakshmi: { left: "22%", top: "26%", width: "56%" },
-      surya: { left: "15%", top: "27%", width: "55%" },
-    },
-  },
-  {
-    id: "hairAccessory",
-    label: "Hair accessory",
-    image: "/avatar-accessories/hair-scrunchie.png",
-    position: {
-      lakshmi: { left: "68%", top: "10%", width: "20%" },
-      surya: { left: "58%", top: "6%", width: "18%" },
-    },
-  },
-  {
-    id: "backpackCharm",
-    label: "Backpack charm",
-    image: "/avatar-accessories/backpack-charm.png",
-    position: {
-      lakshmi: { left: "62%", top: "50%", width: "18%" },
-      surya: { left: "62%", top: "48%", width: "16%" },
-    },
-  },
-];
-
 export interface AvatarConfig {
   scrubColorId: string;
   coatOn: boolean;
-  accessories: Partial<Record<AccessoryOption["id"], boolean>>;
 }
 
 export const DEFAULT_AVATAR_CONFIG: AvatarConfig = {
   scrubColorId: "classic-gray",
   coatOn: false,
-  accessories: {},
 };
+
+/** The actual sprite for a character's confirmed look - same coat/scrubs
+ * lookup Avatar Setup's own preview uses, pulled out here so anywhere else
+ * that wants to show "how this person currently looks" (the Lounge's
+ * profile button) doesn't duplicate it. */
+export function getAvatarSpriteSrc(characterId: CharacterId, config: AvatarConfig): string {
+  const scrubColor = SCRUB_COLORS.find((c) => c.id === config.scrubColorId) ?? SCRUB_COLORS[0]!;
+  return config.coatOn ? scrubColor.images[characterId].coat : scrubColor.images[characterId].scrubs;
+}
 
 function storageKey(characterId: CharacterId): string {
   return `ward-games:avatar:${characterId}`;

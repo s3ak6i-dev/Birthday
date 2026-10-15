@@ -5,8 +5,10 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { DialogueScene, PixelButton, palette } from "@ward-games/ui";
+import { ROOM } from "@ward-games/shared";
 import { TRIAGE_DIAL_TUTORIAL } from "./triage-dial-tutorial";
 import { GYNA_PORTRAITS } from "../lib/gyna-portraits";
+import { randomRoomCode } from "../lib/room-code";
 
 const RULES = [
   "One of you gives the clue, the other drags the needle - roles swap every round.",
@@ -20,6 +22,7 @@ export function TriageDialIntro() {
   const navigate = useNavigate();
   const [mode, setMode] = useState<"coop" | "versus">("coop");
   const [showHowToPlay, setShowHowToPlay] = useState(false);
+  const [joinCode, setJoinCode] = useState("");
 
   return (
     <main
@@ -87,12 +90,36 @@ export function TriageDialIntro() {
           (masterdoc.md section 5), so there's no category picker yet.
         </p>
 
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <PixelButton onClick={() => navigate(`/g/triage-dial/play?mode=${mode}`)}>Play</PixelButton>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+          <PixelButton onClick={() => navigate(`/g/triage-dial/${randomRoomCode()}?mode=${mode}`)}>
+            Create room
+          </PixelButton>
+          <input
+            value={joinCode}
+            onChange={(e) => setJoinCode(e.target.value.toUpperCase().slice(0, ROOM.codeLength))}
+            placeholder="Room code"
+            style={{ padding: 8, width: 110, textTransform: "uppercase" }}
+          />
+          <PixelButton
+            disabled={joinCode.length !== ROOM.codeLength}
+            onClick={() => navigate(`/g/triage-dial/${joinCode}`)}
+          >
+            Join room
+          </PixelButton>
           <PixelButton variant="danger" onClick={() => setShowHowToPlay(true)}>
             How to play
           </PixelButton>
         </div>
+        <p style={{ margin: "12px 0 0", fontSize: 12, opacity: 0.7 }}>
+          Or{" "}
+          <button
+            onClick={() => navigate(`/g/triage-dial/play?mode=${mode}`)}
+            style={{ background: "none", border: "none", color: palette.white, textDecoration: "underline", cursor: "pointer", padding: 0, font: "inherit" }}
+          >
+            practice solo on this device
+          </button>{" "}
+          (pass-and-play, no partner needed).
+        </p>
       </div>
 
       {showHowToPlay && (

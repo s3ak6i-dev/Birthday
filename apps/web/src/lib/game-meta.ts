@@ -15,6 +15,13 @@ export interface GameMeta {
    * route (S16/S17: `/wordle`, not `/g/wordle`) per masterdoc.md. */
   introRoute: string;
   live: boolean;
+  /** How many people actually play a round - Wordle's daily mode is
+   * solo-per-device (both solve independently), race/duel are head to
+   * head, so it's the one game genuinely spanning 1-2 rather than a flat 2. */
+  players: string;
+  /** One short skill/genre label for the Games list and Stats table row -
+   * not a game mechanic name, just what kind of thinking it exercises. */
+  category: string;
 }
 
 export const GAME_META: GameMeta[] = [
@@ -24,6 +31,8 @@ export const GAME_META: GameMeta[] = [
     tagline: "Guess Who, clinical edition - find your partner's secret patient first.",
     introRoute: "/g/guess-the-diagnosis",
     live: true,
+    players: "2 players",
+    category: "Clinical reasoning",
   },
   {
     id: "triage-dial",
@@ -31,6 +40,8 @@ export const GAME_META: GameMeta[] = [
     tagline: "Call it before the needle settles - vitals, vibes, and a shared spectrum.",
     introRoute: "/g/triage-dial",
     live: true,
+    players: "2 players",
+    category: "Prioritisation",
   },
   {
     id: "wordle",
@@ -38,6 +49,8 @@ export const GAME_META: GameMeta[] = [
     tagline: "The daily word, with a medical vocabulary and a race/duel mode.",
     introRoute: "/wordle",
     live: true,
+    players: "1-2 players",
+    category: "Medical vocabulary",
   },
   {
     id: "code-red",
@@ -45,6 +58,8 @@ export const GAME_META: GameMeta[] = [
     tagline: "Bedside emergencies, roles, and a protocol binder under the clock.",
     introRoute: "/g/code-red",
     live: false,
+    players: "2 players",
+    category: "Rapid decision-making",
   },
   {
     id: "case-files",
@@ -52,6 +67,8 @@ export const GAME_META: GameMeta[] = [
     tagline: "Evidence board, co-op diagnosis, a slower mystery to solve together.",
     introRoute: "/g/case-files",
     live: false,
+    players: "2 players",
+    category: "Clinical reasoning",
   },
 ];
 

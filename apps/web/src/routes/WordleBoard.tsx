@@ -7,7 +7,7 @@
 // other two games, Wordle isn't turn-based: both players solve their own
 // board independently, so there's no "whose turn" concept here at all,
 // just per-player board state.
-import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { DialogueScene, PixelButton, palette } from "@ward-games/ui";
 import {
@@ -20,6 +20,7 @@ import {
 } from "@ward-games/shared";
 import { WORDLE_TUTORIAL } from "./wordle-tutorial";
 import { GYNA_PORTRAITS } from "../lib/gyna-portraits";
+import { sfxKeyTap, sfxLose, sfxTileFlip, sfxWin } from "../lib/sfx";
 
 const P1: PlayerId = "p1";
 const P2: PlayerId = "p2";
@@ -130,6 +131,7 @@ export function WordleBoard() {
 
   function submitDraft() {
     if (draft.length !== WORD_LENGTH) return;
+    sfxTileFlip();
     setState((s) => wordleEngine.reduce(s, { type: "submitGuess", word: draft }, viewingPlayer));
     setDraft("");
   }
@@ -141,9 +143,23 @@ export function WordleBoard() {
     } else if (key === "BACK") {
       setDraft((d) => d.slice(0, -1));
     } else if (/^[A-Z]$/.test(key) && draft.length < WORD_LENGTH) {
+      sfxKeyTap();
       setDraft((d) => d + key);
     }
   }
+
+  // Win/lose sound, once per player's own board as it actually finishes -
+  // guarded by a Set (not a single ref) since this is local pass-and-play
+  // and either player's board can finish independently of which one is
+  // currently being viewed; switching the "viewing as" toggle back to an
+  // already-finished board must not replay the sound.
+  const soundedPlayersRef = useRef<Set<PlayerId>>(new Set());
+  useEffect(() => {
+    if (!finished || soundedPlayersRef.current.has(viewingPlayer)) return;
+    soundedPlayersRef.current.add(viewingPlayer);
+    if (board.solved) sfxWin();
+    else sfxLose();
+  }, [finished, board.solved, viewingPlayer]);
 
   useEffect(() => {
     if (!canType) return;

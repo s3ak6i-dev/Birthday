@@ -13,6 +13,12 @@
 // just a shorter trip, and mirrored via CSS when the hop travels leftward
 // since the jump art itself only faces right.
 //
+// Clicking it while idle (asleep, resting, or resting on the perch) plays
+// a short bark reaction in place (`frames.bark`) before falling into
+// whatever that click would have triggered anyway - wake up, wander off,
+// hop down. Omit `frames.bark` and clicking just does that move directly,
+// same as before this existed.
+//
 // Frame set (see TODO.md Art / art/export/ward-dog/) was sliced from full
 // pose-and-cycle sheets, not independently generated frame-by-frame - see
 // scripts/trace-hotspots.py's doc comment for why that matters (art
@@ -41,6 +47,10 @@ export interface CritterFrames {
   walkRight: string[];
   /** A full walk cycle facing left - mirrors walkRight's gait order, drawn (not CSS-flipped) facing the other way. */
   walkLeft: string[];
+  /** A short bark reaction, in order - e.g. perk up, mouth open, mouth
+   * open again (a second bark), settle. Plays once on click, in place,
+   * then falls back into whatever the critter would have done next. */
+  bark?: string[];
 }
 
 export interface WanderBox {
@@ -70,10 +80,11 @@ export interface AnimatedCritterProps {
   label?: string;
 }
 
-type CritterState = "asleep" | "stretching" | "jumping" | "walking" | "resting" | "restingOnPerch";
+type CritterState = "asleep" | "stretching" | "jumping" | "walking" | "resting" | "restingOnPerch" | "barking";
 
 const JUMP_FRAME_MS = 150;
 const WALK_FRAME_MS = 140;
+const BARK_FRAME_MS = 190;
 
 function randomBetween(min: number, max: number) {
   return min + Math.random() * (max - min);
@@ -133,6 +144,7 @@ export function AnimatedCritter({
   const [moveMs, setMoveMs] = useState(1000); // must match how long the current position transition actually takes - see walkTo()/jumpDown()
   const [walkFrameIndex, setWalkFrameIndex] = useState(0);
   const [jumpFrameIndex, setJumpFrameIndex] = useState(0);
+  const [barkFrameIndex, setBarkFrameIndex] = useState(0);
   // The jump art (jump-5..8) only faces right - CSS-mirrored when a hop's
   // net horizontal travel is leftward, the same trick walk-left/walk-right
   // would otherwise need real separate art for (see the jumping branch of
@@ -282,6 +294,12 @@ export function AnimatedCritter({
         () => setJumpFrameIndex((i) => Math.min(i + 1, cycleLength - 1)),
         JUMP_FRAME_MS
       );
+    } else if (state === "barking") {
+      const cycleLength = frames?.bark?.length || 1;
+      tickRef.current = setInterval(
+        () => setBarkFrameIndex((i) => Math.min(i + 1, cycleLength - 1)),
+        BARK_FRAME_MS
+      );
     }
     return () => {
       if (tickRef.current) clearInterval(tickRef.current);
@@ -306,26 +324,41 @@ export function AnimatedCritter({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately only re-rolls when entering "resting", not on every frames-prop identity change
   }, [state]);
 
-  // Clicking the dog skips straight to whatever its next move would
-  // eventually be, instead of waiting out the random idle timer: wakes +
-  // leaps down from asleep, wanders off from resting on the floor, hops
-  // down and wanders off from resting on the perch. No-ops while it's
-  // already mid-animation (stretching, jumping, or walking) rather than
-  // cutting that off awkwardly, and respects reduced-motion like every
-  // other movement here.
+  // Clicking the dog plays a quick bark reaction in place - if it's
+  // currently idle (asleep, resting on the floor, or resting on the
+  // perch), not if it's already mid-animation (stretching, jumping,
+  // walking) where swapping to a stationary bark pose mid-leap or mid-
+  // stride would read as broken rather than reactive; the caller's own
+  // onTap sound still plays regardless of state, this is just the visual
+  // half. Once the bark cycle finishes, it falls straight into whatever
+  // move a plain click used to trigger immediately (wake + leap down from
+  // asleep, wander off from resting, hop down from the perch) - the bark
+  // is a reaction layered in front of that, not a replacement for it. No
+  // bark art registered for this critter just skips straight to that move,
+  // same as before this existed. Respects reduced-motion like every other
+  // movement here (sound-only feedback for those users, no pose change).
   function handleClick() {
     onTap?.();
     if (reduced.current) return;
-    if (state === "asleep") {
-      if (timerRef.current) clearTimeout(timerRef.current);
-      triggerRef.current.wakeUp();
-    } else if (state === "resting") {
-      if (timerRef.current) clearTimeout(timerRef.current);
-      triggerRef.current.startWandering();
-    } else if (state === "restingOnPerch") {
-      if (timerRef.current) clearTimeout(timerRef.current);
-      triggerRef.current.hopDownFromPerch();
+    if (state !== "asleep" && state !== "resting" && state !== "restingOnPerch") return;
+
+    const resume =
+      state === "asleep"
+        ? triggerRef.current.wakeUp
+        : state === "resting"
+          ? triggerRef.current.startWandering
+          : triggerRef.current.hopDownFromPerch;
+
+    if (timerRef.current) clearTimeout(timerRef.current);
+
+    const barkFrameCount = frames?.bark?.length ?? 0;
+    if (barkFrameCount === 0) {
+      resume();
+      return;
     }
+    setBarkFrameIndex(0);
+    setState("barking");
+    timerRef.current = setTimeout(resume, barkFrameCount * BARK_FRAME_MS);
   }
 
   const effectiveState = reduced.current ? "asleep" : state;
@@ -340,9 +373,11 @@ export function AnimatedCritter({
         ? frames?.stretch
         : effectiveState === "jumping"
           ? frames?.jump?.[jumpFrameIndex]
-          : resting
-            ? restPoseSrc
-            : (facing === "right" ? frames?.walkRight : frames?.walkLeft)?.[walkFrameIndex];
+          : effectiveState === "barking"
+            ? frames?.bark?.[barkFrameIndex]
+            : resting
+              ? restPoseSrc
+              : (facing === "right" ? frames?.walkRight : frames?.walkLeft)?.[walkFrameIndex];
 
   const style: CSSProperties = {
     position: "absolute",
@@ -365,6 +400,11 @@ export function AnimatedCritter({
     width: "100%",
     height: "100%",
     objectFit: "contain",
+    // The frame art is small, nearest-neighbour-scaled pixel art (see
+    // art/export/ward-dog/) - let the browser upscale it the same way
+    // instead of smoothing/blurring it when the stage is wider than the
+    // source frame.
+    imageRendering: "pixelated",
     transform: effectiveState === "jumping" && jumpFacing === "left" ? "scaleX(-1)" : undefined,
   };
 

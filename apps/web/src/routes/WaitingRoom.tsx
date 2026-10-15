@@ -9,19 +9,23 @@
 // "navigate here with a fresh random code".
 //
 // Once the room's phase moves to "playing"/"done" this renders the
-// game's real board instead of the lobby. Only Guess the Diagnosis has
-// that board built so far (GuessTheDiagnosisRoomBoard) - the other games
-// still only have the local pass-and-play simulation (TODO.md M1), so
-// this says so plainly rather than silently falling back to something
-// that isn't actually multiplayer.
+// game's real board instead of the lobby. Guess the Diagnosis, Triage
+// Dial, and Wordle all have real room boards now (GuessTheDiagnosisRoomBoard/
+// TriageDialRoomBoard/WordleRoomBoard) - Code Red and Case Files still only
+// have engine stubs with no board at all (TODO.md M2/M3), so this says so
+// plainly rather than silently falling back to something that isn't
+// actually multiplayer.
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { PixelButton, palette } from "@ward-games/ui";
 import { ROOM, type GameId } from "@ward-games/shared";
 import { useRoom } from "../lib/use-room";
 import { CHARACTERS, characterForEmail } from "../lib/characters";
 import { supabase } from "../lib/supabase";
+import { sfxCountdownGo, sfxCountdownTick, sfxReactionPop } from "../lib/sfx";
 import { GuessTheDiagnosisRoomBoard } from "./GuessTheDiagnosisRoomBoard";
+import { TriageDialRoomBoard } from "./TriageDialRoomBoard";
+import { WordleRoomBoard } from "./WordleRoomBoard";
 
 const GAME_LABEL: Record<GameId, string> = {
   "guess-the-diagnosis": "Guess the Diagnosis",
@@ -47,12 +51,19 @@ function isGameId(value: string | undefined): value is GameId {
 export function WaitingRoom() {
   const { game, code } = useParams<{ game: string; code: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [selfEmailFallback, setSelfEmailFallback] = useState<string | null>(null);
   const [floatingReaction, setFloatingReaction] = useState<{ id: number; emoji: string } | null>(null);
   const [countdownText, setCountdownText] = useState("");
 
   const validGame = isGameId(game);
-  const room = useRoom(code ?? "", validGame ? (game as GameId) : "guess-the-diagnosis");
+  // Only meaningful the moment a room is first created (ward-room.ts only
+  // reads this from whoever connects first) - Triage Dial's coop/versus and
+  // Wordle's daily/race/duel. Carried as a query param rather than part of
+  // the route itself since every other game (and "Join room," which never
+  // sets this) uses the exact same /g/:game/:code shape.
+  const mode = searchParams.get("mode") ?? undefined;
+  const room = useRoom(code ?? "", validGame ? (game as GameId) : "guess-the-diagnosis", mode);
 
   useEffect(() => {
     // Backfill only - useRoom already resolves this from the session itself
@@ -69,10 +80,19 @@ export function WaitingRoom() {
 
   useEffect(() => {
     let raf: number;
+    let lastShown: string | null = null;
     function tick() {
       if (room.countdownEndsAt) {
         const msLeft = room.countdownEndsAt - Date.now();
-        setCountdownText(msLeft > 500 ? String(Math.ceil(msLeft / 1000)) : "Go!");
+        const shown = msLeft > 500 ? String(Math.ceil(msLeft / 1000)) : "Go!";
+        if (shown !== lastShown) {
+          // Only on an actual second-transition (3 -> 2 -> 1 -> Go!), not
+          // every animation frame in between.
+          lastShown = shown;
+          if (shown === "Go!") sfxCountdownGo();
+          else sfxCountdownTick();
+        }
+        setCountdownText(shown);
       }
       raf = requestAnimationFrame(tick);
     }
@@ -89,6 +109,7 @@ export function WaitingRoom() {
   // *own* tap land is enough feedback for v1; seeing the partner's float
   // over their screen is the intended effect, not yours.
   function sendReaction(emoji: string) {
+    sfxReactionPop();
     room.sendReaction(emoji);
     setFloatingReaction({ id: Date.now(), emoji: REACTION_GLYPH[emoji] ?? emoji });
     window.setTimeout(() => setFloatingReaction(null), 1400);
@@ -140,10 +161,19 @@ export function WaitingRoom() {
   }
 
   if (room.phase === "playing" || room.phase === "done" || room.phase === "paused") {
-    if (game === "guess-the-diagnosis") {
+    const board =
+      game === "guess-the-diagnosis" ? (
+        <GuessTheDiagnosisRoomBoard room={room} labelFor={labelFor} />
+      ) : game === "triage-dial" ? (
+        <TriageDialRoomBoard room={room} labelFor={labelFor} />
+      ) : game === "wordle" ? (
+        <WordleRoomBoard room={room} labelFor={labelFor} />
+      ) : null;
+
+    if (board) {
       return (
         <>
-          <GuessTheDiagnosisRoomBoard room={room} labelFor={labelFor} />
+          {board}
           {room.phase === "paused" && <ReconnectOverlay onLeave={() => room.leave()} />}
           <ReactionDock onReact={sendReaction} floating={floatingReaction} />
         </>

@@ -12,7 +12,7 @@
 // "argue" (nothing meaningfully different to show between them - see the
 // comment on handleLockIn) where the band/score/reactions sit until either
 // player continues to the next round.
-import { useMemo, useRef, useState, type PointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { DialogueScene, PixelButton, palette } from "@ward-games/ui";
 import {
@@ -23,6 +23,7 @@ import {
 } from "@ward-games/shared";
 import { TRIAGE_DIAL_TUTORIAL } from "./triage-dial-tutorial";
 import { GYNA_PORTRAITS } from "../lib/gyna-portraits";
+import { sfxBullseye, sfxError, sfxLockIn, sfxReveal } from "../lib/sfx";
 
 const P1: PlayerId = "p1";
 const P2: PlayerId = "p2";
@@ -200,6 +201,7 @@ export function TriageDialBoard() {
   }
 
   function handleLockIn() {
+    sfxLockIn();
     // Reveal is a near-instant transitional phase with nothing distinct to
     // show on its own (see the file header comment) - chain straight into
     // argue so the UI only ever has to render one post-lock state.
@@ -208,6 +210,20 @@ export function TriageDialBoard() {
       return triageDialEngine.reduce(afterLock, { type: "advanceRound" }, dialerOf(afterLock));
     });
   }
+
+  // The reveal/score sound, played once the engine actually computes a
+  // score - not inline in handleLockIn above, since that only kicks off
+  // the state update and doesn't know the result yet. Guarded per-round
+  // (not just "score went from null to non-null") so it can't re-fire if
+  // a re-render happens to read the same round's already-set score again.
+  const soundedRoundRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (currentRound.score === null || soundedRoundRef.current === state.round) return;
+    soundedRoundRef.current = state.round;
+    if (currentRound.score === 4) sfxBullseye();
+    else if (currentRound.score === 0) sfxError();
+    else sfxReveal();
+  }, [currentRound.score, state.round]);
 
   function handleContinue() {
     dispatch({ type: "advanceRound" }, viewingPlayer);

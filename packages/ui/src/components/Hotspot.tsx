@@ -10,6 +10,7 @@
 // falls back to a plain rounded-rect glow when no outline is supplied.
 import type { CSSProperties, ReactNode } from "react";
 import { palette } from "../tokens";
+import { playClick } from "../sfx";
 
 export interface HotspotRect {
   /** All percentages of the containing stage, 0-100, so this survives a re-crop or resize of the background art. */
@@ -64,6 +65,11 @@ export function Hotspot({ left, top, width, height, label, locked, outline, onAc
     padding: 0,
   };
 
+  function handleClick() {
+    playClick();
+    onActivate?.();
+  }
+
   return (
     <>
       <button
@@ -72,7 +78,7 @@ export function Hotspot({ left, top, width, height, label, locked, outline, onAc
         style={buttonStyle}
         aria-label={locked ? `${label} (coming soon)` : label}
         disabled={locked}
-        onClick={onActivate}
+        onClick={handleClick}
       >
         {locked && (
           <span

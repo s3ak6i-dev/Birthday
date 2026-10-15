@@ -1,20 +1,24 @@
 // S03 Avatar setup. See masterdoc.md FR-90 and screen inventory section
 // 2.2. "Faces and hair are fixed" - this screen only ever customizes
-// scrubs color, coat on/off, and the 5 accessory slots; see
-// lib/avatar-options.ts for the scope note on why "scrubs color" is a set
-// of pre-generated sprite pairs rather than live CSS recoloring.
+// scrubs color and coat on/off; see lib/avatar-options.ts for the scope
+// note on why "scrubs color" is a set of pre-generated sprite pairs rather
+// than live CSS recoloring. The 5-accessory picker this screen used to
+// have was removed - the confirmed look (this screen's actual output) is
+// now also what shows as the profile button on the Lounge, so it stays to
+// just the two choices that look change actually was.
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { PixelButton, palette } from "@ward-games/ui";
-import { CHARACTERS, type CharacterLogin } from "../lib/characters";
+import { CHARACTERS, characterForEmail, type CharacterLogin } from "../lib/characters";
 import {
-  ACCESSORIES,
   SCRUB_COLORS,
+  getAvatarSpriteSrc,
   loadAvatarConfig,
   saveAvatarConfig,
   type AvatarConfig,
   type CharacterId,
 } from "../lib/avatar-options";
+import { supabase } from "../lib/supabase";
 
 // Natural aspect ratio (width/height) of each sprite variant - the coat
 // adds some width relative to height, so it isn't quite the same box as
@@ -55,6 +59,18 @@ export function AvatarSetup() {
   const [characterId, setCharacterId] = useState<CharacterId>("lakshmi");
   const [config, setConfig] = useState<AvatarConfig>(() => loadAvatarConfig("lakshmi"));
 
+  // Default to whoever is actually signed in - Surya opening this screen
+  // should land on Surya's own look, not always Lakshmi's - same
+  // session-email -> characterForEmail lookup as the Lounge's profile
+  // button. Only runs once on mount; picking the other person via the
+  // character row above still works exactly as before.
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      const signedIn = characterForEmail(data.session?.user.email);
+      if (signedIn) setCharacterId(signedIn.id);
+    });
+  }, []);
+
   useEffect(() => {
     setConfig(loadAvatarConfig(characterId));
   }, [characterId]);
@@ -64,13 +80,8 @@ export function AvatarSetup() {
   }, [characterId, config]);
 
   const character = CHARACTERS.find((c: CharacterLogin) => c.id === characterId)!;
-  const scrubColor = SCRUB_COLORS.find((c) => c.id === config.scrubColorId) ?? SCRUB_COLORS[0]!;
-  const spriteSrc = config.coatOn ? scrubColor.images[characterId].coat : scrubColor.images[characterId].scrubs;
+  const spriteSrc = getAvatarSpriteSrc(characterId, config);
   const aspect = config.coatOn ? SPRITE_ASPECT[characterId].coat : SPRITE_ASPECT[characterId].scrubs;
-
-  function toggleAccessory(id: (typeof ACCESSORIES)[number]["id"]) {
-    setConfig((c) => ({ ...c, accessories: { ...c.accessories, [id]: !c.accessories[id] } }));
-  }
 
   return (
     <main style={{ position: "relative", minHeight: "100vh", color: palette.white, padding: "24px 16px" }}>
@@ -113,7 +124,7 @@ export function AvatarSetup() {
           </span>
         </h1>
         <p style={{ textAlign: "center", opacity: 0.85, fontSize: 13, margin: "0 0 22px" }}>
-          Faces and hair are fixed - scrubs, coat, and accessories are yours to pick.
+          Faces and hair are fixed - scrubs and coat are yours to pick.
         </p>
 
         <div style={{ display: "flex", justifyContent: "center", gap: 12, marginBottom: 24 }}>
@@ -173,18 +184,6 @@ export function AvatarSetup() {
               alt={character.label}
               style={{ width: "100%", height: "100%", objectFit: "contain" }}
             />
-            {ACCESSORIES.map((acc) => {
-              if (!config.accessories[acc.id]) return null;
-              const pos = acc.position[characterId];
-              return (
-                <img
-                  key={acc.id}
-                  src={acc.image}
-                  alt=""
-                  style={{ position: "absolute", left: pos.left, top: pos.top, width: pos.width, height: "auto" }}
-                />
-              );
-            })}
           </div>
 
           {/* Controls */}
@@ -216,32 +215,6 @@ export function AvatarSetup() {
               >
                 {config.coatOn ? "Coat on" : "Coat off"}
               </PixelButton>
-            </PanelSection>
-
-            <PanelSection icon="✨" title="Accessories">
-              <div style={{ display: "grid", gap: 8 }}>
-                {ACCESSORIES.map((acc) => (
-                  <button
-                    key={acc.id}
-                    onClick={() => toggleAccessory(acc.id)}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 10,
-                      padding: "6px 10px",
-                      background: config.accessories[acc.id] ? palette.violet : "transparent",
-                      border: `2px solid ${config.accessories[acc.id] ? palette.white : palette.deepViolet}`,
-                      borderRadius: 8,
-                      color: palette.white,
-                      cursor: "pointer",
-                      textAlign: "left",
-                    }}
-                  >
-                    <img src={acc.image} alt="" style={{ width: 28, height: 28, objectFit: "contain" }} />
-                    {acc.label}
-                  </button>
-                ))}
-              </div>
             </PanelSection>
           </div>
         </div>

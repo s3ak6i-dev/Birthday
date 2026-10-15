@@ -40,6 +40,54 @@ export function StatsIcon() {
   );
 }
 
+export function SoundOnIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="100%" height="100%" aria-hidden="true">
+      <path d="M4 10v4h3.5L12 17.5v-11L7.5 10H4Z" {...stroke} />
+      <path d="M16 9.5a4 4 0 0 1 0 5M18.5 7a7.5 7.5 0 0 1 0 10" {...stroke} />
+    </svg>
+  );
+}
+
+export function SoundOffIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="100%" height="100%" aria-hidden="true">
+      <path d="M4 10v4h3.5L12 17.5v-11L7.5 10H4Z" {...stroke} />
+      <path d="M16.5 9.5l5 5M21.5 9.5l-5 5" {...stroke} />
+    </svg>
+  );
+}
+
+export function MusicNoteIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="100%" height="100%" aria-hidden="true">
+      <path d="M9 17V5l10-2v12" {...stroke} />
+      <circle cx="6.5" cy="17" r="2.5" {...stroke} />
+      <circle cx="16.5" cy="15" r="2.5" {...stroke} />
+    </svg>
+  );
+}
+
+export function MusicNoteOffIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="100%" height="100%" aria-hidden="true">
+      <path d="M9 17V5l10-2v12" {...stroke} />
+      <circle cx="6.5" cy="17" r="2.5" {...stroke} />
+      <circle cx="16.5" cy="15" r="2.5" {...stroke} />
+      <path d="M3 3l18 18" {...stroke} />
+    </svg>
+  );
+}
+
+export function AvatarIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="100%" height="100%" aria-hidden="true">
+      <circle cx="12" cy="8.2" r="3.6" {...stroke} />
+      <path d="M4.5 20c0-4.1 3.4-6.5 7.5-6.5s7.5 2.4 7.5 6.5" {...stroke} />
+    </svg>
+  );
+}
+
 export function SettingsIcon() {
   return (
     <svg viewBox="0 0 24 24" width="100%" height="100%" aria-hidden="true">

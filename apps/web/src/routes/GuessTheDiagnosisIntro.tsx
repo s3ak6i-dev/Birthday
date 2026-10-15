@@ -18,16 +18,7 @@ import { DialogueScene, PixelButton, palette } from "@ward-games/ui";
 import { ROOM } from "@ward-games/shared";
 import { GUESS_THE_DIAGNOSIS_TUTORIAL } from "./guess-the-diagnosis-tutorial";
 import { GYNA_PORTRAITS } from "../lib/gyna-portraits";
-
-const CODE_LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ"; // no I/O - easy to mishear/misread aloud
-
-function randomRoomCode(): string {
-  let code = "";
-  for (let i = 0; i < ROOM.codeLength; i++) {
-    code += CODE_LETTERS[Math.floor(Math.random() * CODE_LETTERS.length)];
-  }
-  return code;
-}
+import { randomRoomCode } from "../lib/room-code";
 
 const RULES = [
   "You and your partner each secretly hold one patient from a 24-card board.",

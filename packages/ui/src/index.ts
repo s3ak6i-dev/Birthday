@@ -10,3 +10,6 @@ export * from "./components/AnimatedCritter";
 export * from "./components/IconButton";
 export * from "./components/Logotype";
 export * from "./components/icons";
+export * from "./components/stat-icons";
+export * from "./sfx";
+export * from "./music";

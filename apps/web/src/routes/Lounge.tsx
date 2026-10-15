@@ -16,42 +16,66 @@
 //  - player sprites standing in the room (needs avatar art, M2/M3)
 //  - Gyna (the owl mascot) perched on the pendant lamp - named, art not
 //    generated yet, see TODO.md
-import { useRef } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AnimatedCritter, Hotspot, IconButton, WindowLight } from "@ward-games/ui";
+import {
+  AvatarIcon,
+  Hotspot,
+  IconButton,
+  MIN_TOUCH_TARGET_PX,
+  MusicNoteIcon,
+  MusicNoteOffIcon,
+  SoundOffIcon,
+  SoundOnIcon,
+  WindowLight,
+  isMusicMuted,
+  isSfxMuted,
+  palette,
+  playClick,
+  toggleMusicMuted,
+  toggleSfxMuted,
+} from "@ward-games/ui";
 import { LOUNGE_HOTSPOTS } from "./lounge-hotspots";
-import { unlockSticker } from "../lib/progress";
+import { characterForEmail, type CharacterLogin } from "../lib/characters";
 import { supabase } from "../lib/supabase";
-
-// "Dog Whisperer" (sticker 13, packages/shared/src/stickers.ts) - tap the
-// Ward Dog 10 times. Lifetime count, not per-visit, so it survives a
-// refresh; not tied to any one game or room, just a browser-local tally
-// until it fires once.
-const DOG_TAP_COUNT_KEY = "ward-games:dog-tap-count";
-const DOG_TAP_STICKER_ID = 13;
 
 // Real pixel-art icons (art/export/icons/), replacing the placeholder SVGs.
 const navIcon = (src: string) => <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />;
 
 export function Lounge() {
   const navigate = useNavigate();
-  const alreadyUnlockedRef = useRef(false);
+  // The Avatar Setup nav button shows the signed-in player's own bust
+  // portrait and name (same bust art AvatarSetup's own character picker
+  // uses) instead of a generic person icon, once we know who that is -
+  // resolved the same way WaitingRoom.tsx does (session email ->
+  // characterForEmail). Falls back to the plain AvatarIcon while that
+  // lookup is in flight or if nobody's signed in.
+  const [profileCharacter, setProfileCharacter] = useState<CharacterLogin | null>(null);
 
-  function handleDogTap() {
-    if (alreadyUnlockedRef.current) return;
-    let count = 0;
-    try {
-      count = Number(localStorage.getItem(DOG_TAP_COUNT_KEY) ?? "0") + 1;
-      localStorage.setItem(DOG_TAP_COUNT_KEY, String(count));
-    } catch {
-      return; // storage blocked - skip counting rather than unlock on every tap
-    }
-    if (count < 10) return;
-    alreadyUnlockedRef.current = true; // don't re-fire the lookup every tap past 10
+  useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      const userId = data.session?.user.id;
-      if (userId) unlockSticker(userId, DOG_TAP_STICKER_ID).catch(() => {});
+      setProfileCharacter(characterForEmail(data.session?.user.email) ?? null);
     });
+  }, []);
+
+  // No Settings screen (S25) exists yet to put real sound toggles in, so
+  // these are stand-ins here, same pattern as Avatar Setup not having a
+  // nav link until it got one above - the engines' own mute states
+  // (packages/ui/src/sfx.ts and music.ts) already persist to localStorage,
+  // this just needs visible switches for them. Two separate toggles, not
+  // one: masterdoc.md 2.7 treats SFX and music as independently
+  // toggleable, and the music loop is the one sound here that starts on
+  // its own without a click - worth a one-tap kill switch more than any
+  // one-shot SFX would be. Move both into Settings once that screen exists.
+  const [muted, setMuted] = useState(isSfxMuted);
+  const [musicMuted, setMusicMuted] = useState(isMusicMuted);
+
+  function handleToggleMute() {
+    setMuted(toggleSfxMuted());
+  }
+
+  function handleToggleMusicMute() {
+    setMusicMuted(toggleMusicMuted());
   }
 
   return (
@@ -73,61 +97,6 @@ export function Lounge() {
             Pure CSS, pointer-events:none so it never blocks a hotspot. */}
         <WindowLight left={18} top={52} width={68} height={38} />
 
-        {/* Ward Dog - full pose-and-cycle sheet, sliced into frames (see
-            art/export/ward-dog/). Home position matches where the cat used
-            to sit on the sofa; widthPct scales with the art instead of
-            staying a fixed pixel size at every viewport width.
-
-            Every coordinate below was measured directly against
-            lounge_dusk.png (1672x941) with a percent grid overlaid, not
-            eyeballed - see TODO.md for the measurements and for a second
-            correction made after the first pass: `left`/`top` position the
-            sprite box's TOP-LEFT corner, not its feet, and at widthPct=7 /
-            boxAspect=0.8 that box is ~10% of the stage tall - so every
-            target below is the *measured contact surface's y minus ~10*,
-            not the surface's y directly (verified by screenshotting the
-            actual render, not just trusting the arithmetic - the first
-            pass put the dog standing in front of the ottoman instead of on
-            it). wanderBox stays below every piece of furniture's floor
-            contact line (deepest one measured, the office chair's wheel
-            base, bottoms out around 64%); perch targets the ottoman's own
-            top surface (measured ~52-53%) in front of the sofa. */}
-        <AnimatedCritter
-          homeLeft={40}
-          homeTop={47}
-          landingLeft={40}
-          landingTop={53}
-          wanderBox={{ left: 14, top: 57, width: 70, height: 25 }}
-          perch={{ left: 50, top: 43 }}
-          widthPct={7}
-          onTap={handleDogTap}
-          frames={{
-            asleep: "/ward-dog/asleep.png",
-            stretch: "/ward-dog/stretch.png",
-            // Crouch -> launch -> peak airborne -> land - position animates from
-            // the sofa down to the floor in sync with this sequence (AnimatedCritter's jumpDown()).
-            jump: ["/ward-dog/jump-5.png", "/ward-dog/jump-6.png", "/ward-dog/jump-7.png", "/ward-dog/jump-8.png"],
-            back: "/ward-dog/back.png",
-            restPoses: ["/ward-dog/sit-relaxed.png", "/ward-dog/sit-alert.png", "/ward-dog/sit-pant.png"],
-            walkRight: [
-              "/ward-dog/walk-right-1.png",
-              "/ward-dog/walk-right-2.png",
-              "/ward-dog/walk-right-3.png",
-              "/ward-dog/walk-right-4.png",
-              "/ward-dog/walk-right-5.png",
-              "/ward-dog/walk-right-6.png",
-            ],
-            walkLeft: [
-              "/ward-dog/walk-left-1.png",
-              "/ward-dog/walk-left-2.png",
-              "/ward-dog/walk-left-3.png",
-              "/ward-dog/walk-left-4.png",
-              "/ward-dog/walk-left-5.png",
-              "/ward-dog/walk-left-6.png",
-            ],
-          }}
-        />
-
         {LOUNGE_HOTSPOTS.map((hotspot) => (
           <Hotspot
             key={hotspot.id}
@@ -148,7 +117,12 @@ export function Lounge() {
           />
         ))}
 
-        {/* Nav, as corner icon clusters - Games/Album/Stats top-left, Settings top-right. */}
+        {/* Nav, as corner icon clusters - Games/Album/Stats top-left,
+            Avatar Setup/Settings top-right (grouped together as the two
+            "about me" actions, rather than piling a fourth icon into the
+            left content cluster). Avatar Setup existed on its own route
+            since M2 but had no way in from anywhere in the UI until now -
+            direct-URL only. */}
         <div style={{ position: "absolute", left: "2%", top: "2.5%", display: "flex", gap: 8 }}>
           <IconButton label="Games" onClick={() => navigate("/games")}>
             {navIcon("/icons/games.png")}
@@ -160,7 +134,69 @@ export function Lounge() {
             {navIcon("/icons/stats.png")}
           </IconButton>
         </div>
-        <div style={{ position: "absolute", right: "2%", top: "2.5%" }}>
+        <div style={{ position: "absolute", right: "2%", top: "2.5%", display: "flex", alignItems: "center", gap: 8 }}>
+          {/* Shows the player's own bust portrait and name (profileCharacter,
+              resolved above) once known - a real "who am I" rather than a
+              generic icon, same bust art + circular crop as AvatarSetup's
+              own character picker. Not a plain IconButton since it needs
+              room for the name label below the circle; AvatarIcon (plain
+              inline SVG, packages/ui/src/components/icons.tsx) is only the
+              fallback for the brief moment before the session lookup
+              resolves, or if nobody's signed in. */}
+          <button
+            type="button"
+            aria-label="Avatar Setup"
+            title="Avatar Setup"
+            onClick={() => {
+              playClick();
+              navigate("/avatar");
+            }}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 2,
+              background: "none",
+              border: "none",
+              padding: 0,
+              cursor: "pointer",
+              color: palette.white,
+            }}
+          >
+            <span
+              style={{
+                width: MIN_TOUCH_TARGET_PX,
+                height: MIN_TOUCH_TARGET_PX,
+                borderRadius: "50%",
+                background: "rgba(20,16,31,0.68)",
+                border: `2px solid ${palette.ink}`,
+                display: "grid",
+                placeItems: "center",
+                overflow: "hidden",
+              }}
+            >
+              {profileCharacter ? (
+                <img
+                  src={profileCharacter.bust}
+                  alt=""
+                  style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center 15%" }}
+                />
+              ) : (
+                <AvatarIcon />
+              )}
+            </span>
+            {profileCharacter && (
+              <span style={{ fontSize: 10, lineHeight: 1, textShadow: "0 1px 2px rgba(0,0,0,0.85)" }}>
+                {profileCharacter.label}
+              </span>
+            )}
+          </button>
+          <IconButton label={muted ? "Unmute sound" : "Mute sound"} onClick={handleToggleMute}>
+            {muted ? <SoundOffIcon /> : <SoundOnIcon />}
+          </IconButton>
+          <IconButton label={musicMuted ? "Unmute music" : "Mute music"} onClick={handleToggleMusicMute}>
+            {musicMuted ? <MusicNoteOffIcon /> : <MusicNoteIcon />}
+          </IconButton>
           <IconButton label="Settings" onClick={() => navigate("/settings")}>
             {navIcon("/icons/settings.png")}
           </IconButton>

@@ -2,19 +2,26 @@
 // generated" rule (D13). Expand this directory with the rest of the shared
 // component set (panel, dialogue box, nav bar, reaction bar, etc.) as each
 // screen in the inventory (masterdoc.md section 2.2) gets built.
-import type { ButtonHTMLAttributes } from "react";
+import type { ButtonHTMLAttributes, MouseEvent } from "react";
 import { palette, MIN_TOUCH_TARGET_PX } from "../tokens";
+import { playClick } from "../sfx";
 
 export interface PixelButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "primary" | "danger";
 }
 
-export function PixelButton({ variant = "primary", style, children, ...rest }: PixelButtonProps) {
+export function PixelButton({ variant = "primary", style, children, onClick, ...rest }: PixelButtonProps) {
   const background = variant === "danger" ? palette.coral : palette.violet;
+
+  function handleClick(e: MouseEvent<HTMLButtonElement>) {
+    playClick();
+    onClick?.(e);
+  }
 
   return (
     <button
       {...rest}
+      onClick={handleClick}
       style={{
         background,
         color: palette.white,

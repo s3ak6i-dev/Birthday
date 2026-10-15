@@ -21,6 +21,7 @@ import type { RoomHandle } from "../lib/use-room";
 import { GUESS_THE_DIAGNOSIS_TUTORIAL } from "./guess-the-diagnosis-tutorial";
 import { GYNA_PORTRAITS } from "../lib/gyna-portraits";
 import { recordGameResult, unlockSticker } from "../lib/progress";
+import { sfxCardSelect, sfxError, sfxLifeline, sfxLose, sfxStickerUnlock, sfxWin } from "../lib/sfx";
 
 const TUTORIAL_SEEN_KEY = "ward-games:tutorial-seen:guess-the-diagnosis";
 
@@ -68,16 +69,37 @@ export function GuessTheDiagnosisRoomBoard({
     recordedResultRef.current = true;
     const outcome = view.winner === selfId ? "win" : "loss";
     recordGameResult(selfId, "guess-the-diagnosis", outcome).catch(() => {});
-    if (outcome === "loss") {
-      unlockSticker(selfId, 7).catch(() => {}); // "Minor Setback" - lose any live game
+    if (outcome === "win") {
+      sfxWin();
+    } else {
+      sfxLose();
+      unlockSticker(selfId, 7) // "Minor Setback" - lose any live game
+        .then(() => sfxStickerUnlock())
+        .catch(() => {});
     }
   }, [view?.winner, room.selfId]);
+
+  // A wrong final guess costs a life without ending the game (that only
+  // happens once both players' lives hit zero) - the win/lose effect
+  // above only ever fires once, at the very end, so it can't cover this.
+  // Tracked by diffing against the previous render's life count instead
+  // of needing a new signal from the engine/room.
+  const prevLivesRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!view || !room.selfId) return;
+    const lives = view.lives[room.selfId] ?? 0;
+    if (prevLivesRef.current !== null && lives < prevLivesRef.current) {
+      sfxError();
+    }
+    prevLivesRef.current = lives;
+  }, [view, room.selfId]);
 
   function dispatch(action: GuessTheDiagnosisAction) {
     room.sendAction(action);
   }
 
   function toggleEliminated(cardId: string) {
+    sfxCardSelect();
     setEliminated((prev) => {
       const next = new Set(prev);
       if (next.has(cardId)) next.delete(cardId);
@@ -311,7 +333,7 @@ export function GuessTheDiagnosisRoomBoard({
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <PixelButton
                 disabled={!myLifelines || myLifelines.consult}
-                onClick={() => dispatch({ type: "useConsult" })}
+                onClick={() => { sfxLifeline(); dispatch({ type: "useConsult" }); }}
                 style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
               >
                 <img src="/guess-the-diagnosis-ui/icon-consult.png" alt="" style={{ width: 18, height: 18 }} />
@@ -319,7 +341,7 @@ export function GuessTheDiagnosisRoomBoard({
               </PixelButton>
               <PixelButton
                 disabled={!myLifelines || myLifelines.secondOpinion}
-                onClick={() => dispatch({ type: "useSecondOpinion" })}
+                onClick={() => { sfxLifeline(); dispatch({ type: "useSecondOpinion" }); }}
                 style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
               >
                 <img src="/guess-the-diagnosis-ui/icon-second-opinion.png" alt="" style={{ width: 18, height: 18 }} />

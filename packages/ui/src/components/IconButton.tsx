@@ -3,17 +3,24 @@
 // the Forest Blast / WHIZZ-style layout discussion (section 2.2's "plain,
 // non-pixel-hunt nav" requirement, FR-11, satisfied via always-visible
 // corner icons instead of a bottom strip).
-import type { ButtonHTMLAttributes } from "react";
+import type { ButtonHTMLAttributes, MouseEvent } from "react";
 import { palette, MIN_TOUCH_TARGET_PX } from "../tokens";
+import { playClick } from "../sfx";
 
 export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   label: string;
 }
 
-export function IconButton({ label, children, style, ...rest }: IconButtonProps) {
+export function IconButton({ label, children, style, onClick, ...rest }: IconButtonProps) {
+  function handleClick(e: MouseEvent<HTMLButtonElement>) {
+    playClick();
+    onClick?.(e);
+  }
+
   return (
     <button
       {...rest}
+      onClick={handleClick}
       aria-label={label}
       title={label}
       style={{
