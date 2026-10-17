@@ -23,7 +23,7 @@ import {
 } from "@ward-games/shared";
 import { TRIAGE_DIAL_TUTORIAL } from "./triage-dial-tutorial";
 import { GYNA_PORTRAITS } from "../lib/gyna-portraits";
-import { sfxBullseye, sfxError, sfxLockIn, sfxReveal } from "../lib/sfx";
+import { GYNA_SQUAWK_KEY, GYNA_TYPE_KEY, sfxBullseye, sfxError, sfxLockIn, sfxReveal } from "../lib/sfx";
 
 const P1: PlayerId = "p1";
 const P2: PlayerId = "p2";
@@ -236,6 +236,8 @@ export function TriageDialBoard() {
       <DialogueScene
         lines={TRIAGE_DIAL_TUTORIAL}
         portraits={GYNA_PORTRAITS}
+        squawkKey={GYNA_SQUAWK_KEY}
+        typeKey={GYNA_TYPE_KEY}
         onComplete={dismissTutorial}
         onSkip={dismissTutorial}
       />

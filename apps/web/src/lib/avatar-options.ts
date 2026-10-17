@@ -12,6 +12,17 @@
 // same approach as the coat toggle itself - higher quality, much simpler
 // to build, at the cost of needing a new generation per color.
 //
+// The Lounge's in-game PlayableCharacter sprite is a different story -
+// it only ever had the one gray sheet, pre-generating a color pair per
+// FR-90 color there would mean 7 colors × ~29 walk/idle/wave/sit frames
+// × 2 characters, not a reasonable art ask. That one DOES recolor live
+// (packages/ui/src/recolor.ts, wired in by apps/web/src/routes/Lounge.tsx's
+// `scrubColorHexFor`) via masked color-range + connected-component
+// detection rather than a flat hue filter, specifically to avoid the skin/
+// hair bleed problem described above. Reads `scrubColorId` from this same
+// `AvatarConfig`, just takes a different path to the screen than this
+// screen's own preview does.
+//
 // 7 colors total: Classic (the original neutral gray) plus 6 generated
 // variants - 5 use the locked UI palette's own hex values directly (so
 // clothing color and UI accent color are never two different "violets"),

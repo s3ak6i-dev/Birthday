@@ -26,6 +26,9 @@ art/source/*
 # Compiled Ink scenes (generated at build time, section 4.8)
 packages/shared/src/scenes/compiled/
 
+# Claude Code local session/tool state (lock files etc.), not project content
+.claude/
+
 # Editor / OS
 .vscode/*
 !.vscode/extensions.json

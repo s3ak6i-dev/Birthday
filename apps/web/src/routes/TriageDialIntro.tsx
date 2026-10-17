@@ -9,6 +9,7 @@ import { ROOM } from "@ward-games/shared";
 import { TRIAGE_DIAL_TUTORIAL } from "./triage-dial-tutorial";
 import { GYNA_PORTRAITS } from "../lib/gyna-portraits";
 import { randomRoomCode } from "../lib/room-code";
+import { GYNA_SQUAWK_KEY, GYNA_TYPE_KEY } from "../lib/sfx";
 
 const RULES = [
   "One of you gives the clue, the other drags the needle - roles swap every round.",
@@ -126,6 +127,8 @@ export function TriageDialIntro() {
         <DialogueScene
           lines={TRIAGE_DIAL_TUTORIAL}
           portraits={GYNA_PORTRAITS}
+          squawkKey={GYNA_SQUAWK_KEY}
+          typeKey={GYNA_TYPE_KEY}
           onComplete={() => setShowHowToPlay(false)}
           onSkip={() => setShowHowToPlay(false)}
         />

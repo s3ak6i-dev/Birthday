@@ -24,7 +24,7 @@ import type { RoomHandle } from "../lib/use-room";
 import { WORDLE_TUTORIAL } from "./wordle-tutorial";
 import { GYNA_PORTRAITS } from "../lib/gyna-portraits";
 import { recordGameResult, unlockSticker } from "../lib/progress";
-import { sfxKeyTap, sfxLose, sfxStickerUnlock, sfxTileFlip, sfxWin } from "../lib/sfx";
+import { GYNA_SQUAWK_KEY, GYNA_TYPE_KEY, sfxKeyTap, sfxLose, sfxStickerUnlock, sfxTileFlip, sfxWin } from "../lib/sfx";
 
 const WORD_LENGTH = 5;
 const MAX_GUESSES = 6;
@@ -240,7 +240,14 @@ export function WordleRoomBoard({
 
   if (showTutorial) {
     return (
-      <DialogueScene lines={WORDLE_TUTORIAL} portraits={GYNA_PORTRAITS} onComplete={dismissTutorial} onSkip={dismissTutorial} />
+      <DialogueScene
+        lines={WORDLE_TUTORIAL}
+        portraits={GYNA_PORTRAITS}
+        squawkKey={GYNA_SQUAWK_KEY}
+        typeKey={GYNA_TYPE_KEY}
+        onComplete={dismissTutorial}
+        onSkip={dismissTutorial}
+      />
     );
   }
 

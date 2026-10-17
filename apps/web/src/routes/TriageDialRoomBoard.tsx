@@ -25,7 +25,7 @@ import type { RoomHandle } from "../lib/use-room";
 import { TRIAGE_DIAL_TUTORIAL } from "./triage-dial-tutorial";
 import { GYNA_PORTRAITS } from "../lib/gyna-portraits";
 import { recordGameResult, unlockSticker } from "../lib/progress";
-import { sfxBullseye, sfxError, sfxLockIn, sfxLose, sfxReveal, sfxStickerUnlock, sfxWin } from "../lib/sfx";
+import { GYNA_SQUAWK_KEY, GYNA_TYPE_KEY, sfxBullseye, sfxError, sfxLockIn, sfxLose, sfxReveal, sfxStickerUnlock, sfxWin } from "../lib/sfx";
 
 const SCORE_BAND_LABEL: Record<number, string> = { 4: "Bullseye!", 3: "Close", 2: "Edge", 0: "Miss" };
 const TUTORIAL_SEEN_KEY = "ward-games:tutorial-seen:triage-dial";
@@ -247,6 +247,8 @@ export function TriageDialRoomBoard({
       <DialogueScene
         lines={TRIAGE_DIAL_TUTORIAL}
         portraits={GYNA_PORTRAITS}
+        squawkKey={GYNA_SQUAWK_KEY}
+        typeKey={GYNA_TYPE_KEY}
         onComplete={dismissTutorial}
         onSkip={dismissTutorial}
       />

@@ -11,6 +11,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { palette } from "../tokens";
 import { PortraitPlaceholder } from "./PortraitPlaceholder";
 import { PixelButton } from "./PixelButton";
+import { playLoopingSound, playSound } from "../sfx";
 
 export interface DialogueLine {
   speaker: string;
@@ -47,6 +48,24 @@ export interface DialogueSceneProps {
    * mutually exclusive with `hidePortrait`.
    */
   portraitPosition?: Pick<CSSProperties, "top" | "left" | "right" | "bottom" | "width" | "height">;
+  /**
+   * A registered sfx key (packages/ui's `registerSound`) to play once each
+   * time a new line appears - e.g. a per-character talk blip/squawk. Plain
+   * key, not a speaker lookup: this component stays agnostic about which
+   * character is talking, the caller decides whether/what to play. Omit
+   * for a silent scene; `playSound` already no-ops on an unregistered key,
+   * so passing one the host app never registered is harmless too.
+   */
+  squawkKey?: string;
+  /**
+   * A registered sfx key to loop for as long as a line is actively
+   * typewriter-revealing - a continuous typing-clack bed rather than
+   * `squawkKey`'s once-per-line blip. Starts when a new line begins,
+   * stops the instant it's fully shown (typed to the end, or the player
+   * tapped to reveal it instantly) or the scene unmounts. Same
+   * agnostic-key contract as `squawkKey` - omit for a silent scene.
+   */
+  typeKey?: string;
 }
 
 function resolvePortraitSrc(line: DialogueLine, portraits?: Record<string, Record<string, string>>): string | undefined {
@@ -66,17 +85,40 @@ export function DialogueScene({
   background,
   hidePortrait,
   portraitPosition,
+  squawkKey,
+  typeKey,
 }: DialogueSceneProps) {
   const [lineIndex, setLineIndex] = useState(0);
   const [charsShown, setCharsShown] = useState(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stopTypingLoopRef = useRef<(() => void) | null>(null);
 
   const line = lines[lineIndex];
   const fullyShown = line !== undefined && charsShown >= line.text.length;
 
   useEffect(() => {
     setCharsShown(0);
+    // Runs once per new line (including the first one, on mount) - exactly
+    // "a new sentence," not once per typewriter tick.
+    if (squawkKey) playSound(squawkKey);
+    if (typeKey) stopTypingLoopRef.current = playLoopingSound(typeKey);
+    return () => {
+      stopTypingLoopRef.current?.();
+      stopTypingLoopRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- squawkKey/
+    // typeKey are static props in every real usage; reacting to a
+    // hypothetical mid-scene key change isn't a behavior anything here needs.
   }, [lineIndex]);
+
+  // Stops the typing loop the instant the line's fully visible - whether it
+  // finished typing out naturally or the player tapped to reveal it early.
+  useEffect(() => {
+    if (fullyShown) {
+      stopTypingLoopRef.current?.();
+      stopTypingLoopRef.current = null;
+    }
+  }, [fullyShown]);
 
   useEffect(() => {
     if (!line || charsShown >= line.text.length) return;

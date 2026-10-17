@@ -23,7 +23,7 @@ import {
 } from "@ward-games/shared";
 import { GUESS_THE_DIAGNOSIS_TUTORIAL } from "./guess-the-diagnosis-tutorial";
 import { GYNA_PORTRAITS } from "../lib/gyna-portraits";
-import { sfxCardSelect, sfxLifeline, sfxWin } from "../lib/sfx";
+import { GYNA_SQUAWK_KEY, GYNA_TYPE_KEY, sfxCardSelect, sfxLifeline, sfxWin } from "../lib/sfx";
 
 const P1: PlayerId = "p1";
 const P2: PlayerId = "p2";
@@ -109,6 +109,8 @@ export function GuessTheDiagnosisBoard() {
       <DialogueScene
         lines={GUESS_THE_DIAGNOSIS_TUTORIAL}
         portraits={GYNA_PORTRAITS}
+        squawkKey={GYNA_SQUAWK_KEY}
+        typeKey={GYNA_TYPE_KEY}
         onComplete={dismissTutorial}
         onSkip={dismissTutorial}
       />

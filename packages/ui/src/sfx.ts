@@ -117,6 +117,45 @@ export function playSound(key: string): void {
   playListeners.forEach((listener) => listener(event));
 }
 
+/**
+ * Like `playSound`, but loops the registered buffer (`source.loop = true`)
+ * and hands back a stop function instead of firing-and-forgetting - for a
+ * sound tied to an ongoing UI state (e.g. a typewriter-text blip that
+ * should keep going while text is still revealing, not just once) rather
+ * than a single discrete event. Its own gain node, same shared
+ * AudioContext as every other sfx/music source - layers on top of
+ * whatever's already playing instead of competing with it. No-ops (returns
+ * a harmless stop function) the same three ways `playSound` does: muted,
+ * no AudioContext, or the key isn't decoded yet.
+ */
+export function playLoopingSound(key: string): () => void {
+  if (muted) return () => {};
+  const ctx = getAudioContext();
+  if (!ctx) return () => {};
+  const buffer = buffers.get(key);
+  if (!buffer) return () => {};
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  source.loop = true;
+  const gain = ctx.createGain();
+  gain.gain.value = volumes.get(key) ?? 1;
+  source.connect(gain).connect(ctx.destination);
+  source.start(0);
+  const event: SfxPlayEvent = { key, at: Date.now() };
+  playListeners.forEach((listener) => listener(event));
+
+  let stopped = false;
+  return () => {
+    if (stopped) return;
+    stopped = true;
+    try {
+      source.stop();
+    } catch {
+      // already stopped - fine
+    }
+  };
+}
+
 export function isSfxMuted(): boolean {
   return muted;
 }

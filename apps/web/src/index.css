@@ -138,13 +138,6 @@ img {
   }
 }
 
-/* Gate entrance sequence - see apps/web/src/routes/EntranceSequence.tsx.
-   Earlier revisions needed a knock-shake keyframe and a Ken Burns zoom
-   here to fake camera movement across separately-generated art. The
-   current 9-shot sequence is one consistent authored set with real "push
-   in" / "shake" / etc. frames already drawn, so none of that CSS is
-   needed anymore - it's a plain crossfade stack, all in the component. */
-
 /* Guess the Diagnosis board (local-sim and real-room versions both use
    these same three class names - GuessTheDiagnosisBoard.tsx and
    GuessTheDiagnosisRoomBoard.tsx). Everything else about these layouts

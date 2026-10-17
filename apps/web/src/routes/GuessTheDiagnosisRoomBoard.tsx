@@ -21,7 +21,7 @@ import type { RoomHandle } from "../lib/use-room";
 import { GUESS_THE_DIAGNOSIS_TUTORIAL } from "./guess-the-diagnosis-tutorial";
 import { GYNA_PORTRAITS } from "../lib/gyna-portraits";
 import { recordGameResult, unlockSticker } from "../lib/progress";
-import { sfxCardSelect, sfxError, sfxLifeline, sfxLose, sfxStickerUnlock, sfxWin } from "../lib/sfx";
+import { GYNA_SQUAWK_KEY, GYNA_TYPE_KEY, sfxCardSelect, sfxError, sfxLifeline, sfxLose, sfxStickerUnlock, sfxWin } from "../lib/sfx";
 
 const TUTORIAL_SEEN_KEY = "ward-games:tutorial-seen:guess-the-diagnosis";
 
@@ -127,6 +127,8 @@ export function GuessTheDiagnosisRoomBoard({
       <DialogueScene
         lines={GUESS_THE_DIAGNOSIS_TUTORIAL}
         portraits={GYNA_PORTRAITS}
+        squawkKey={GYNA_SQUAWK_KEY}
+        typeKey={GYNA_TYPE_KEY}
         onComplete={dismissTutorial}
         onSkip={dismissTutorial}
       />

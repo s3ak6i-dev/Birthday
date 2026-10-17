@@ -44,6 +44,8 @@ export function initSfx(): void {
   registerSound("reaction-pop", src("reaction-pop"), { volume: 0.6 });
   registerSound("sticker-unlock", src("sticker-unlock"), { volume: 0.7 });
   registerSound("dog-tap", src("dog-tap"), { volume: 0.5 });
+  registerSound("gyna-squawk", src("gyna-squawk"), { volume: 0.45 });
+  registerSound("gyna-type", src("gyna-type"), { volume: 0.35 });
 }
 
 // Global UI (PixelButton/IconButton/Hotspot already play "click"/nothing
@@ -78,3 +80,13 @@ export const sfxCountdownGo = () => playSound("countdown-go");
 export const sfxReactionPop = () => playSound("reaction-pop");
 export const sfxStickerUnlock = () => playSound("sticker-unlock");
 export const sfxDogTap = () => playSound("dog-tap");
+
+// Gyna's dialogue blip - passed as `squawkKey` to every `<DialogueScene>`
+// she narrates (every one so far), rather than a bare string literal
+// repeated at each call site.
+export const GYNA_SQUAWK_KEY = "gyna-squawk";
+
+// Gyna's typing-clack loop - passed as `typeKey` to the same
+// `<DialogueScene>` call sites, plays for as long as a line is actively
+// revealing.
+export const GYNA_TYPE_KEY = "gyna-type";

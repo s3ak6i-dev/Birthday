@@ -19,6 +19,7 @@ import { ROOM } from "@ward-games/shared";
 import { GUESS_THE_DIAGNOSIS_TUTORIAL } from "./guess-the-diagnosis-tutorial";
 import { GYNA_PORTRAITS } from "../lib/gyna-portraits";
 import { randomRoomCode } from "../lib/room-code";
+import { GYNA_SQUAWK_KEY, GYNA_TYPE_KEY } from "../lib/sfx";
 
 const RULES = [
   "You and your partner each secretly hold one patient from a 24-card board.",
@@ -123,6 +124,8 @@ export function GuessTheDiagnosisIntro() {
         <DialogueScene
           lines={GUESS_THE_DIAGNOSIS_TUTORIAL}
           portraits={GYNA_PORTRAITS}
+          squawkKey={GYNA_SQUAWK_KEY}
+          typeKey={GYNA_TYPE_KEY}
           onComplete={() => setShowHowToPlay(false)}
           onSkip={() => setShowHowToPlay(false)}
         />

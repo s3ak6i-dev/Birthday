@@ -9,6 +9,7 @@ import { ROOM, type WordleMode } from "@ward-games/shared";
 import { WORDLE_TUTORIAL } from "./wordle-tutorial";
 import { GYNA_PORTRAITS } from "../lib/gyna-portraits";
 import { randomRoomCode } from "../lib/room-code";
+import { GYNA_SQUAWK_KEY, GYNA_TYPE_KEY } from "../lib/sfx";
 
 const MODES: { id: WordleMode; label: string; blurb: string }[] = [
   { id: "daily", label: "Daily", blurb: "One shared word a day. Solve it on your own, compare once you're both done." },
@@ -137,6 +138,8 @@ export function WordleIntro() {
         <DialogueScene
           lines={WORDLE_TUTORIAL}
           portraits={GYNA_PORTRAITS}
+          squawkKey={GYNA_SQUAWK_KEY}
+          typeKey={GYNA_TYPE_KEY}
           onComplete={() => setShowHowToPlay(false)}
           onSkip={() => setShowHowToPlay(false)}
         />

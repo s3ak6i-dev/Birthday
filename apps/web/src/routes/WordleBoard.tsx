@@ -20,7 +20,7 @@ import {
 } from "@ward-games/shared";
 import { WORDLE_TUTORIAL } from "./wordle-tutorial";
 import { GYNA_PORTRAITS } from "../lib/gyna-portraits";
-import { sfxKeyTap, sfxLose, sfxTileFlip, sfxWin } from "../lib/sfx";
+import { GYNA_SQUAWK_KEY, GYNA_TYPE_KEY, sfxKeyTap, sfxLose, sfxTileFlip, sfxWin } from "../lib/sfx";
 
 const P1: PlayerId = "p1";
 const P2: PlayerId = "p2";
@@ -175,7 +175,14 @@ export function WordleBoard() {
 
   if (showTutorial) {
     return (
-      <DialogueScene lines={WORDLE_TUTORIAL} portraits={GYNA_PORTRAITS} onComplete={dismissTutorial} onSkip={dismissTutorial} />
+      <DialogueScene
+        lines={WORDLE_TUTORIAL}
+        portraits={GYNA_PORTRAITS}
+        squawkKey={GYNA_SQUAWK_KEY}
+        typeKey={GYNA_TYPE_KEY}
+        onComplete={dismissTutorial}
+        onSkip={dismissTutorial}
+      />
     );
   }
 

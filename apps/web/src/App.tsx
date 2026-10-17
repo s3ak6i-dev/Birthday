@@ -1,5 +1,4 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import { Gate } from "./routes/Gate";
 import { Lounge } from "./routes/Lounge";
 import { AvatarSetup } from "./routes/AvatarSetup";
 import { GameIntro } from "./routes/GameIntro";
@@ -23,7 +22,6 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/gate" element={<Gate />} />
         <Route path="/" element={<Lounge />} />
         <Route path="/avatar" element={<AvatarSetup />} />
         <Route path="/g/guess-the-diagnosis" element={<GuessTheDiagnosisIntro />} />
