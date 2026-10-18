@@ -139,7 +139,7 @@ export function useLoungePresence(selfId: string | null): LoungePresence {
       }
       const ageMs = Date.now() - new Date(row.updated_at).getTime();
       const stale = ageMs > STALE_MS;
-      logEvent("poll", { found: true, ageMs, stale });
+      logEvent("poll", { found: true, ageMs, stale, scrub_color: row.scrub_color, pos_left: row.pos_left, pos_top: row.pos_top });
       if (stale) {
         setPartnerState(null);
         return;
