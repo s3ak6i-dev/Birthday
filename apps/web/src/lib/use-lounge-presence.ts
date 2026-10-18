@@ -6,52 +6,71 @@
 // another instance of the same component via its `remote` prop instead of
 // live input.
 //
-// Built on Supabase Realtime's Broadcast + Presence, not the Cloudflare
-// Worker rooms protocol (apps/rooms) - the Lounge isn't a bounded game
-// session with a room code and a start/end, it's an always-on shared
-// space, which is exactly what Presence/Broadcast are for (same system
-// ChatPanel already uses for the Lounge's chat thread, just the
-// broadcast/presence half of Realtime instead of postgres_changes).
-// Broadcast messages never touch Postgres - pure ephemeral pub/sub over
-// the Realtime server, so there's no database cost to a frequent position
-// broadcast, only WebSocket message volume (trivial for two users).
+// Plain REST polling against a `lounge_presence` table (supabase/migrations
+// /0003_lounge_presence.sql), not Supabase Realtime Broadcast/Presence -
+// that was the first version, and it looked right in local testing, but
+// failed live on the actual phone/network this is meant to run on:
+// console logging (see the debug log below, same pattern as
+// lib/audio-debug.ts) showed `subscribe-status CHANNEL_ERROR` and repeated
+// WebSocket connection failures. Broadcasts could still *send* - the
+// Supabase client silently falls back to a plain REST call when the socket
+// is down - but *receiving* absolutely requires a live subscription, which
+// never actually established. Since this is explicitly meant to run
+// primarily on phones (switching WiFi/cellular, getting backgrounded,
+// often behind a carrier proxy that doesn't love long-lived WebSockets),
+// the fix isn't to keep chasing WebSocket reliability - it's to not depend
+// on a persistent connection for this at all. Plain request/response HTTP
+// degrades far more gracefully on a flaky network: every poll is
+// independent, nothing has to stay alive in between.
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CharState, Dir, RemoteCharacterState } from "@ward-games/ui";
 import { supabase } from "./supabase";
 
-const CHANNEL_NAME = "lounge-presence";
-const BROADCAST_EVENT = "move";
-// A position sample is sent at most this often; a facing/state change
-// (e.g. starting to sit) always goes out immediately regardless of this
-// gap, since that's a discrete event worth not delaying, not a continuous
-// value worth sampling.
-const MIN_BROADCAST_INTERVAL_MS = 100;
-// A self-healing resend, independent of whatever triggered the original
-// broadcastSelf call - belt-and-suspenders against any one-off race around
-// first joining (observed live: the flush-on-"SUBSCRIBED" fix below
-// mostly closes this, but didn't fully account for React StrictMode's
-// double effect-invocation in dev tearing a channel down and recreating
-// it right as the first one subscribes). Cheap at a 2s interval for two
-// users on an ephemeral broadcast channel - this is not a database write.
-const HEARTBEAT_MS = 2000;
+const TABLE = "lounge_presence";
+// How often we write our own row while something's actually changing -
+// not a frame-rate, just often enough that the partner's polling (below)
+// always has something recent to read. A discrete change (new facing,
+// started/stopped sitting) always writes immediately regardless of this
+// gap, same reasoning as the old broadcast version's throttle.
+const WRITE_MIN_INTERVAL_MS = 300;
+// How often we ask the server for the partner's current row. Independent
+// of WRITE_MIN_INTERVAL_MS - this is "how fresh do I want my view of them
+// to be," not tied to how often they personally happen to be writing.
+const POLL_INTERVAL_MS = 600;
+// If the partner's row hasn't been touched in this long, treat them as
+// gone (closed the tab, lost network, crashed) rather than leaving a
+// stale last-known position on screen forever - the real backstop here,
+// since the clean-exit delete (below) only covers a normal leave.
+const STALE_MS = 8000;
+// An idle player (not moving) only ever triggers one write - PlayableCharacter's
+// onStateChange only fires when pos/facing/state actually change, so with
+// nothing re-touching the row, `updated_at` would just age past STALE_MS
+// and they'd incorrectly appear to vanish from their partner's screen
+// despite still being right there. Caught live: two sessions, one not
+// moving, its row went stale and disappeared within STALE_MS even though
+// nothing was actually wrong. A heartbeat re-write of the last known
+// state (not necessarily a changed one) at a safe fraction of STALE_MS
+// keeps a merely-idle player's row fresh the same way the broadcast
+// version's heartbeat did.
+const HEARTBEAT_MS = 3000;
 
-interface MovePayload {
-  senderId: string;
-  state: RemoteCharacterState;
+interface PresenceRow {
+  user_id: string;
+  pos_left: number;
+  pos_top: number;
+  facing: Dir;
+  state: CharState;
+  updated_at: string;
 }
 
 // Observability for exactly this "why don't I see my partner" class of bug
-// - there's no way to eyeball a WebSocket from the outside, so the first
-// debugging session for this feature (both players actually in the Lounge,
-// still not seeing each other even after confirming chat's own Realtime
-// connection works) needed instrumentation, not another guess. Same
-// pattern lib/audio-debug.ts already uses for "did this sound actually
-// play": log to console AND keep the last N entries on a window global, so
-// either a person with devtools open or a Playwright check can read back
-// what actually happened instead of needing to catch it live.
+// - there's no way to eyeball a REST poll loop from the outside either, so
+// keep the same console+window-global logging lib/audio-debug.ts already
+// uses for sound playback: every write, poll result, and staleness
+// decision logs to the console and keeps the last 50 on a window global.
 export interface LoungePresenceLogEntry {
   at: number;
-  event: "subscribe-status" | "send" | "receive" | "presence-sync";
+  event: "write" | "poll" | "stale" | "write-error" | "poll-error";
   detail: unknown;
 }
 const MAX_LOG_ENTRIES = 50;
@@ -71,102 +90,123 @@ function logEvent(event: LoungePresenceLogEntry["event"], detail: unknown) {
 
 export interface LoungePresence {
   /** The partner's last-known pos/facing/state, straight off their own
-   * broadcasts - null if they're not actually in the Lounge right now
-   * (never joined this session, or just left/closed the tab), not merely
-   * "hasn't moved yet." */
+   * writes - null if they're not actually in the Lounge right now (never
+   * joined this session, left cleanly, or gone stale per STALE_MS), not
+   * merely "hasn't moved yet." */
   partnerState: RemoteCharacterState | null;
   /** Feed PlayableCharacter's `onStateChange` straight into this -
    * internally throttled, so it's safe to call on every pos/facing/state
-   * change without worrying about flooding the channel. */
+   * change without worrying about writing too often. */
   broadcastSelf: (pos: { left: number; top: number }, facing: Dir, state: CharState) => void;
 }
 
 export function useLoungePresence(selfId: string | null): LoungePresence {
   const [partnerState, setPartnerState] = useState<RemoteCharacterState | null>(null);
-  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  const lastSentAtRef = useRef(0);
-  const lastSentDiscreteRef = useRef<{ facing: Dir; state: CharState } | null>(null);
-  // PlayableCharacter reports its initial pos/facing/state on mount (see
-  // its own onStateChange effect), typically well before this channel has
-  // finished subscribing - a send attempted that early silently never
-  // reaches anyone (Realtime has no "queue it for once I'm ready" behavior
-  // of its own), and if nothing moves after that - two players standing
-  // still - the partner never learns the other one is even in the Lounge.
-  // Caught live: standing still after joining showed 0 elements for the
-  // partner on the other device. Fixed by stashing whatever the latest
-  // call to `broadcastSelf` was and flushing it for real the instant the
-  // channel actually reaches "SUBSCRIBED", instead of only ever sending in
-  // direct response to a state change.
-  const pendingRef = useRef<MovePayload["state"] | null>(null);
+  const lastWriteAtRef = useRef(0);
+  const lastWriteDiscreteRef = useRef<{ facing: Dir; state: CharState } | null>(null);
+  // The latest pos/facing/state regardless of throttling - what the
+  // heartbeat resends. Separate from lastWriteDiscreteRef (which only
+  // tracks facing/state, for the "did the discrete part change" check);
+  // this needs the full triple, including pos, since the heartbeat has to
+  // send a real row, not just know whether to skip.
+  const lastKnownRef = useRef<{ pos: { left: number; top: number }; facing: Dir; state: CharState } | null>(null);
 
   useEffect(() => {
     if (!selfId) return;
-    const myId = selfId; // narrowed to a plain string so the nested flushPending() closure below can use it - TS doesn't carry the `if (!selfId) return` narrowing into a nested function body
-    const channel = supabase.channel(CHANNEL_NAME, { config: { presence: { key: myId } } });
-    channelRef.current = channel;
+    const myId = selfId; // plain string, so nested closures below don't need their own null check
+    let cancelled = false;
 
-    channel.on("broadcast", { event: BROADCAST_EVENT }, ({ payload }: { payload: MovePayload }) => {
-      logEvent("receive", payload);
-      if (payload.senderId === myId) return; // shouldn't normally happen, cheap safety net either way
-      setPartnerState(payload.state);
-    });
-
-    // Presence is the "are they actually here" signal a broadcast channel
-    // has no concept of on its own - clears the partner's character the
-    // instant they leave (tab close, navigate away, lose connection)
-    // instead of leaving a stale last-known position on screen forever.
-    channel.on("presence", { event: "sync" }, () => {
-      const state = channel.presenceState();
-      const keys = Object.keys(state);
-      const partnerStillHere = keys.some((key) => key !== myId);
-      logEvent("presence-sync", { keys, partnerStillHere });
-      if (!partnerStillHere) setPartnerState(null);
-    });
-
-    function flushPending() {
-      if (!pendingRef.current) return;
-      const payload: MovePayload = { senderId: myId, state: pendingRef.current };
-      channel.send({ type: "broadcast", event: BROADCAST_EVENT, payload });
-      logEvent("send", payload);
+    async function poll() {
+      const { data, error } = await supabase.from(TABLE).select("*").neq("user_id", myId).limit(1);
+      if (cancelled) return;
+      if (error) {
+        logEvent("poll-error", error.message);
+        return;
+      }
+      const row = (data as PresenceRow[] | null)?.[0];
+      if (!row) {
+        logEvent("poll", { found: false });
+        setPartnerState(null);
+        return;
+      }
+      const ageMs = Date.now() - new Date(row.updated_at).getTime();
+      const stale = ageMs > STALE_MS;
+      logEvent("poll", { found: true, ageMs, stale });
+      if (stale) {
+        setPartnerState(null);
+        return;
+      }
+      setPartnerState({ pos: { left: row.pos_left, top: row.pos_top }, facing: row.facing, state: row.state });
     }
 
-    channel.subscribe((status) => {
-      logEvent("subscribe-status", status);
-      if (status !== "SUBSCRIBED") return;
-      channel.track({ online: true });
-      flushPending();
-    });
+    function writeRow(pos: { left: number; top: number }, facing: Dir, state: CharState) {
+      const row = { user_id: myId, pos_left: pos.left, pos_top: pos.top, facing, state, updated_at: new Date().toISOString() };
+      logEvent("write", row);
+      supabase
+        .from(TABLE)
+        .upsert(row)
+        .then(({ error }) => {
+          if (error) logEvent("write-error", error.message);
+        });
+    }
 
-    const heartbeat = window.setInterval(flushPending, HEARTBEAT_MS);
+    poll();
+    const pollTimer = window.setInterval(poll, POLL_INTERVAL_MS);
+    // Keeps a merely-idle (not moving) player's row from going stale - see
+    // the HEARTBEAT_MS comment above. Only fires once there's something
+    // real to resend; before the first broadcastSelf call (nothing to
+    // report yet), this is a harmless no-op.
+    const heartbeatTimer = window.setInterval(() => {
+      if (!lastKnownRef.current) return;
+      writeRow(lastKnownRef.current.pos, lastKnownRef.current.facing, lastKnownRef.current.state);
+    }, HEARTBEAT_MS);
 
     return () => {
-      window.clearInterval(heartbeat);
+      cancelled = true;
+      window.clearInterval(pollTimer);
+      window.clearInterval(heartbeatTimer);
       setPartnerState(null);
-      lastSentAtRef.current = 0;
-      lastSentDiscreteRef.current = null;
-      pendingRef.current = null;
-      supabase.removeChannel(channel);
-      channelRef.current = null;
+      lastWriteAtRef.current = 0;
+      lastWriteDiscreteRef.current = null;
+      lastKnownRef.current = null;
+      // Best-effort clean-exit signal - fire-and-forget, nothing here
+      // blocks on it finishing, and the STALE_MS timeout already covers
+      // the case where this never lands (network gone, tab killed).
+      supabase
+        .from(TABLE)
+        .delete()
+        .eq("user_id", myId)
+        .then(({ error }) => {
+          if (error) logEvent("write-error", error.message);
+        });
     };
   }, [selfId]);
 
   const broadcastSelf = useCallback(
     (pos: { left: number; top: number }, facing: Dir, state: CharState) => {
-      pendingRef.current = { pos, facing, state }; // always kept fresh, flushed on subscribe if nothing's sent yet
-      const channel = channelRef.current;
-      if (!channel || !selfId) {
-        logEvent("send", { skipped: "no channel yet", pos, facing, state });
-        return;
-      }
+      lastKnownRef.current = { pos, facing, state }; // always kept fresh, for the heartbeat to resend
+      if (!selfId) return;
       const now = Date.now();
-      const last = lastSentDiscreteRef.current;
+      const last = lastWriteDiscreteRef.current;
       const discreteChanged = !last || last.facing !== facing || last.state !== state;
-      if (!discreteChanged && now - lastSentAtRef.current < MIN_BROADCAST_INTERVAL_MS) return; // too frequent, not worth logging every skip
-      lastSentAtRef.current = now;
-      lastSentDiscreteRef.current = { facing, state };
-      const payload: MovePayload = { senderId: selfId, state: { pos, facing, state } };
-      logEvent("send", payload);
-      channel.send({ type: "broadcast", event: BROADCAST_EVENT, payload });
+      if (!discreteChanged && now - lastWriteAtRef.current < WRITE_MIN_INTERVAL_MS) return;
+      lastWriteAtRef.current = now;
+      lastWriteDiscreteRef.current = { facing, state };
+      const row = {
+        user_id: selfId,
+        pos_left: pos.left,
+        pos_top: pos.top,
+        facing,
+        state,
+        updated_at: new Date().toISOString(),
+      };
+      logEvent("write", row);
+      supabase
+        .from(TABLE)
+        .upsert(row)
+        .then(({ error }) => {
+          if (error) logEvent("write-error", error.message);
+        });
     },
     [selfId]
   );

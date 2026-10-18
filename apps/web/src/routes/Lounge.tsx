@@ -287,11 +287,14 @@ export function Lounge() {
   // Cross-device sync: "I don't see Surya on the screen and the movements
   // syncing" - PlayableCharacter only ever drove one, purely local
   // character before this; see use-lounge-presence.ts for the actual
-  // broadcast/presence wiring. `profileCharacter.id` ("surya"/"lakshmi")
-  // doubles as the presence key - stable per account, no need for the raw
-  // Supabase user id just to tell the two players apart in a room of
-  // exactly two fixed accounts (D8).
-  const { partnerState, broadcastSelf } = useLoungePresence(profileCharacter?.id ?? null);
+  // polling wiring. Needs the REAL Supabase auth user id, not
+  // `profileCharacter.id` ("surya"/"lakshmi") - the lounge_presence
+  // table's user_id column is a real `uuid references auth.users`, and
+  // its RLS policies compare against `auth.uid()` (the JWT's real id), so
+  // the character slug doesn't satisfy either one (caught live: every
+  // write/poll failed with "invalid input syntax for type uuid: 'surya'").
+  const [selfUserId, setSelfUserId] = useState<string | null>(null);
+  const { partnerState, broadcastSelf } = useLoungePresence(selfUserId);
   const partnerCharacter = profileCharacter ? CHARACTERS.find((c) => c.id !== profileCharacter.id) : undefined;
   // Sign-in now lives here instead of a separate /gate screen (see the
   // header comment above) - "needs-signin" drives the inline picker
@@ -320,6 +323,7 @@ export function Lounge() {
     supabase.auth.getSession().then(({ data }) => {
       const character = characterForEmail(data.session?.user.email) ?? null;
       setProfileCharacter(character);
+      setSelfUserId(data.session?.user.id ?? null);
       setAuthStatus(character ? "signed-in" : "needs-signin");
     });
     if (!hasSeenGynaIntro()) setShowGynaIntro(true);
@@ -329,7 +333,7 @@ export function Lounge() {
     if (signingIn) return;
     setSigningIn(true);
     setSignInError(null);
-    const { error: authError } = await supabase.auth.signInWithPassword({
+    const { data, error: authError } = await supabase.auth.signInWithPassword({
       email: character.email,
       password: character.password,
     });
@@ -339,6 +343,7 @@ export function Lounge() {
       return;
     }
     setProfileCharacter(character);
+    setSelfUserId(data.user.id);
     setAuthStatus("signed-in");
   }
 
