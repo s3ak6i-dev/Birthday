@@ -26,6 +26,7 @@ import { sfxCountdownGo, sfxCountdownTick, sfxReactionPop } from "../lib/sfx";
 import { GuessTheDiagnosisRoomBoard } from "./GuessTheDiagnosisRoomBoard";
 import { TriageDialRoomBoard } from "./TriageDialRoomBoard";
 import { WordleRoomBoard } from "./WordleRoomBoard";
+import { GAME_META_BY_ID } from "../lib/game-meta";
 
 const GAME_LABEL: Record<GameId, string> = {
   "guess-the-diagnosis": "Guess the Diagnosis",
@@ -165,7 +166,9 @@ export function WaitingRoom() {
             ? "Your partner didn't reconnect in time - the ward closed this room."
             : "This room was left."}
         </h1>
-        <PixelButton onClick={() => navigate(`/g/${game}`)}>Back to {GAME_LABEL[game as GameId]}</PixelButton>
+        <PixelButton onClick={() => navigate(GAME_META_BY_ID[game as GameId].introRoute)}>
+          Back to {GAME_LABEL[game as GameId]}
+        </PixelButton>
       </main>
     );
   }
@@ -221,7 +224,7 @@ export function WaitingRoom() {
     >
       <div style={{ width: "min(92vw, 560px)" }}>
         <p>
-          <Link to={`/g/${game}`} style={{ color: palette.white }}>
+          <Link to={GAME_META_BY_ID[game as GameId].introRoute} style={{ color: palette.white }}>
             ← Back to {GAME_LABEL[game as GameId]}
           </Link>
         </p>
