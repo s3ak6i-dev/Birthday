@@ -100,20 +100,30 @@ export function WaitingRoom() {
     return () => cancelAnimationFrame(raf);
   }, [room.countdownEndsAt]);
 
-  // Reaction toasts: use RoomMessage's own "reaction" relay rather than a
-  // separate socket listener - useRoom doesn't surface raw reactions today
-  // (TODO.md: reaction UI), so this listens for them the same way useRoom
-  // does, directly off the hook's own emoji sender being called by the
-  // partner... which useRoom doesn't expose either. Simplest real fix:
-  // reactions are purely ephemeral fire-and-forget (FR-23) - showing your
-  // *own* tap land is enough feedback for v1; seeing the partner's float
-  // over their screen is the intended effect, not yours.
+  // Your own tap: shown immediately, locally, without waiting on a server
+  // round-trip.
   function sendReaction(emoji: string) {
     sfxReactionPop();
     room.sendReaction(emoji);
     setFloatingReaction({ id: Date.now(), emoji: REACTION_GLYPH[emoji] ?? emoji });
     window.setTimeout(() => setFloatingReaction(null), 1400);
   }
+
+  // The partner's reaction: ward-room.ts relays a "reaction" message to
+  // every *other* connection in the room (never echoed back to the
+  // sender), and useRoom surfaces that as `incomingReaction` - this was the
+  // missing half (FR-23 shipped send+relay but never actually displayed
+  // what arrived on the receiving end, see TODO.md). `at` makes the same
+  // emoji sent twice in a row still a distinct dependency value, so the
+  // effect re-fires and restarts the toast's timeout instead of no-op'ing
+  // on an unchanged object.
+  useEffect(() => {
+    if (!room.incomingReaction) return;
+    const { emoji } = room.incomingReaction;
+    setFloatingReaction({ id: room.incomingReaction.at, emoji: REACTION_GLYPH[emoji] ?? emoji });
+    const timer = window.setTimeout(() => setFloatingReaction(null), 1400);
+    return () => window.clearTimeout(timer);
+  }, [room.incomingReaction]);
 
   if (!validGame || !code) {
     return (

@@ -10,19 +10,19 @@ export type TileState = "correct" | "present" | "absent" | "empty";
  * pool - duel mode doesn't use this at all, since its words are typed in
  * live by the other player (FR-53). */
 export interface WordleEntry {
-  word: string; // 5 uppercase letters
+  word: string; // uppercase letters, MIN_WORD_LENGTH-MAX_WORD_LENGTH (engine.ts)
   definition: string;
   pack: string;
   source: string;
 }
 
 export interface WordleGuessRow {
-  letters: string[]; // length 5
-  tiles: TileState[]; // length 5, shape-coded too in the UI per section 2.8
+  letters: string[]; // same length as the target word for that round
+  tiles: TileState[]; // same length as `letters`, shape-coded too in the UI per section 2.8
 }
 
 export interface WordlePlayerBoard {
-  guesses: WordleGuessRow[]; // max 6 rows
+  guesses: WordleGuessRow[]; // max target.length + 1 rows (maxGuessesFor, engine.ts)
   solved: boolean;
   hintUsed: boolean; // unlocks after guess 4, FR-55
 }
@@ -83,6 +83,13 @@ export interface WordleTargetInfoRedacted {
  * (harmless to expose in every mode, so it's not mode-gated here). */
 export interface WordleRedactedState extends Omit<WordleState, "targetFor" | "boards"> {
   ownTarget: WordleTargetInfoRedacted;
+  /** The target word's length - not a spoiler the way the word itself is,
+   * needed up front to render the right number of tile boxes/keyboard
+   * guess rows. 0 during duel's "setup" phase before a word exists yet. */
+  ownTargetLength: number;
+  /** target length + 1 (maxGuessesFor, engine.ts) - replaces the old flat
+   * "6 guesses for everyone" now that word length varies. */
+  ownMaxGuesses: number;
   ownBoard: WordlePlayerBoard;
   opponentGuessCount: number;
   opponentBoard: WordlePlayerBoard | null;

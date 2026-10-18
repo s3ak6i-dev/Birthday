@@ -13,6 +13,8 @@ import { DialogueScene, PixelButton, palette } from "@ward-games/ui";
 import {
   wordleEngine,
   PLACEHOLDER_ENTRIES,
+  MIN_WORD_LENGTH,
+  MAX_WORD_LENGTH,
   type PlayerId,
   type TileState,
   type WordleMode,
@@ -20,13 +22,12 @@ import {
 } from "@ward-games/shared";
 import { WORDLE_TUTORIAL } from "./wordle-tutorial";
 import { GYNA_PORTRAITS } from "../lib/gyna-portraits";
+import { ChatPanel } from "../components/ChatPanel";
 import { GYNA_SQUAWK_KEY, GYNA_TYPE_KEY, sfxKeyTap, sfxLose, sfxTileFlip, sfxWin } from "../lib/sfx";
 
 const P1: PlayerId = "p1";
 const P2: PlayerId = "p2";
 const PLAYER_LABEL: Record<PlayerId, string> = { [P1]: "Player 1", [P2]: "Player 2" };
-const WORD_LENGTH = 5;
-const MAX_GUESSES = 6;
 const HINT_UNLOCKS_AFTER_GUESS = 4;
 const KEYBOARD_ROWS = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"];
 const TILE_STYLE: Record<TileState, { bg: string; color: string; glyph: string }> = {
@@ -70,20 +71,32 @@ function keyboardStates(guesses: { letters: string[]; tiles: TileState[] }[]): R
   return states;
 }
 
-function Tile({ letter, state }: { letter: string; state: TileState }) {
+// A fixed 48px tile (the original, 5-letters-only size) times 8 columns
+// plus gaps would be ~426px wide - fine on desktop, but overflows a narrow
+// phone (iPhone SE is 320px). Shrinks only once the word actually needs
+// more room than 5 letters; shorter words still render at the original
+// full size.
+function tileSizeFor(wordLength: number): number {
+  if (wordLength <= 5) return 48;
+  if (wordLength === 6) return 42;
+  if (wordLength === 7) return 38;
+  return 34; // 8 (MAX_WORD_LENGTH)
+}
+
+function Tile({ letter, state, size = 48 }: { letter: string; state: TileState; size?: number }) {
   const style = TILE_STYLE[state];
   return (
     <div
       style={{
-        width: 48,
-        height: 48,
+        width: size,
+        height: size,
         display: "grid",
         placeItems: "center",
         background: style.bg,
         color: style.color,
         border: `2px solid ${state === "empty" ? palette.deepViolet : palette.ink}`,
         borderRadius: 6,
-        fontSize: 20,
+        fontSize: Math.round(size * 0.42),
         fontWeight: "bold",
         position: "relative",
       }}
@@ -126,11 +139,16 @@ export function WordleBoard() {
 
   const view = useMemo(() => wordleEngine.redact(state, viewingPlayer), [state, viewingPlayer]);
   const board = view.ownBoard;
-  const finished = board.solved || board.guesses.length >= MAX_GUESSES;
+  // Both vary per word now (custom word lengths) instead of being flat
+  // constants - 0/1 during duel's pre-setup phase (view.ownTargetLength),
+  // harmless since nothing reads them until phase is "solving".
+  const wordLength = view.ownTargetLength;
+  const maxGuesses = view.ownMaxGuesses;
+  const finished = board.solved || board.guesses.length >= maxGuesses;
   const canType = state.phase === "solving" && !finished;
 
   function submitDraft() {
-    if (draft.length !== WORD_LENGTH) return;
+    if (draft.length !== wordLength) return;
     sfxTileFlip();
     setState((s) => wordleEngine.reduce(s, { type: "submitGuess", word: draft }, viewingPlayer));
     setDraft("");
@@ -142,7 +160,7 @@ export function WordleBoard() {
       submitDraft();
     } else if (key === "BACK") {
       setDraft((d) => d.slice(0, -1));
-    } else if (/^[A-Z]$/.test(key) && draft.length < WORD_LENGTH) {
+    } else if (/^[A-Z]$/.test(key) && draft.length < wordLength) {
       sfxKeyTap();
       setDraft((d) => d + key);
     }
@@ -226,6 +244,7 @@ export function WordleBoard() {
         ))}
         <span style={{ opacity: 0.7, fontSize: 13 }}>(stand-in for two devices until rooms/M1)</span>
         <PixelButton onClick={() => setShowTutorial(true)}>How to play</PixelButton>
+        <ChatPanel />
         <span style={{ marginLeft: "auto" }}>
           {mode === "daily" ? `Daily · ${state.istDate}` : mode === "race" ? "Race" : "Duel"} · Opponent guesses:{" "}
           {view.opponentGuessCount}
@@ -241,19 +260,22 @@ export function WordleBoard() {
         {state.phase !== "setup" && state.phase !== "done" && (
           <>
             <div style={{ display: "grid", gap: 6, marginBottom: 16 }}>
-              {Array.from({ length: MAX_GUESSES }).map((_, rowIndex) => {
+              {Array.from({ length: maxGuesses }).map((_, rowIndex) => {
                 const submitted = board.guesses[rowIndex];
                 const isDraftRow = !submitted && rowIndex === board.guesses.length && canType;
+                const tileSize = tileSizeFor(wordLength);
                 return (
                   <div key={rowIndex} style={{ display: "flex", gap: 6, justifyContent: "center" }}>
-                    {Array.from({ length: WORD_LENGTH }).map((__, colIndex) => {
+                    {Array.from({ length: wordLength }).map((__, colIndex) => {
                       if (submitted) {
-                        return <Tile key={colIndex} letter={submitted.letters[colIndex]!} state={submitted.tiles[colIndex]!} />;
+                        return (
+                          <Tile key={colIndex} letter={submitted.letters[colIndex]!} state={submitted.tiles[colIndex]!} size={tileSize} />
+                        );
                       }
                       if (isDraftRow) {
-                        return <Tile key={colIndex} letter={draft[colIndex] ?? ""} state="empty" />;
+                        return <Tile key={colIndex} letter={draft[colIndex] ?? ""} state="empty" size={tileSize} />;
                       }
-                      return <Tile key={colIndex} letter="" state="empty" />;
+                      return <Tile key={colIndex} letter="" state="empty" size={tileSize} />;
                     })}
                   </div>
                 );
@@ -372,10 +394,12 @@ function DuelSetup({
 
   return (
     <div style={{ display: "grid", gap: 10 }}>
-      <p style={{ fontSize: 14 }}>Set a 5-letter word for {PLAYER_LABEL[opponent]} to solve:</p>
+      <p style={{ fontSize: 14 }}>
+        Set a {MIN_WORD_LENGTH}-{MAX_WORD_LENGTH}-letter word for {PLAYER_LABEL[opponent]} to solve:
+      </p>
       <input
         value={wordInput}
-        onChange={(e) => setWordInput(e.target.value.toUpperCase().slice(0, 5))}
+        onChange={(e) => setWordInput(e.target.value.toUpperCase().slice(0, MAX_WORD_LENGTH))}
         placeholder="WORD"
         style={{ padding: 8, borderRadius: 6, fontSize: 18, textAlign: "center", letterSpacing: 4 }}
       />
@@ -386,7 +410,7 @@ function DuelSetup({
         style={{ padding: 8, borderRadius: 6 }}
       />
       <PixelButton
-        disabled={!/^[A-Z]{5}$/.test(wordInput)}
+        disabled={wordInput.length < MIN_WORD_LENGTH || wordInput.length > MAX_WORD_LENGTH || !/^[A-Z]+$/.test(wordInput)}
         onClick={() => {
           setState((s) =>
             wordleEngine.reduce(s, { type: "setSecretWord", word: wordInput, hint: hintInput || undefined }, viewingPlayer)

@@ -10,7 +10,7 @@ export * from "./placeholder-content";
 
 export { triageDialEngine } from "./games/triage-dial/engine";
 export { guessTheDiagnosisEngine } from "./games/guess-the-diagnosis/engine";
-export { wordleEngine } from "./games/wordle/engine";
+export { wordleEngine, MIN_WORD_LENGTH, MAX_WORD_LENGTH } from "./games/wordle/engine";
 export { codeRedEngine } from "./games/code-red/engine";
 export { caseFilesEngine } from "./games/case-files/engine";
 export { GAME_ENGINES } from "./games/registry";

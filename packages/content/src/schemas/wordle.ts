@@ -3,9 +3,14 @@ import { z } from "zod";
 
 export const wordleEntrySchema = z.object({
   id: z.string().min(1),
+  // 4-8 letters, matching MIN_WORD_LENGTH/MAX_WORD_LENGTH in
+  // packages/shared/src/games/wordle/engine.ts - was a fixed 5 (masterdoc.md
+  // 3.3's original spec) until custom-length words were added; keep these
+  // two bounds in sync if either one ever changes.
   word: z
     .string()
-    .length(5, "Wordle words must be exactly 5 letters, see masterdoc.md 3.3")
+    .min(4, "Wordle words must be 4-8 letters")
+    .max(8, "Wordle words must be 4-8 letters")
     .regex(/^[A-Z]+$/, "words must be uppercase A-Z"),
   definition: z.string().min(1),
   pack: z.enum(["General", "OB-GYN", "Pharmacology", "Anatomy", "Pediatrics", "Inside-Jokes"]),

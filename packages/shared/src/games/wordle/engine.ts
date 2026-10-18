@@ -29,8 +29,18 @@ import type {
   WordleTargetInfo,
 } from "./types";
 
-const MAX_GUESSES = 6;
+// Was a flat 5 (masterdoc.md 3.3's original "five-letter words" spec) until
+// custom-length words were added - now a range, with the guess budget
+// scaling per word via `maxGuessesFor` (classic Wordle convention: one more
+// guess than the word's own length) instead of one fixed number for every
+// word regardless of how long it is.
+export const MIN_WORD_LENGTH = 4;
+export const MAX_WORD_LENGTH = 8;
 const HINT_UNLOCKS_AFTER_GUESS = 4;
+
+function maxGuessesFor(wordLength: number): number {
+  return wordLength + 1;
+}
 
 export interface WordleInitOptions {
   mode: WordleState["mode"];
@@ -59,7 +69,11 @@ function normalizeWord(word: string): string {
 }
 
 function assertValidWord(word: string): void {
-  assert(/^[A-Z]{5}$/.test(word), `"${word}" must be exactly 5 letters A-Z`);
+  assert(/^[A-Z]+$/.test(word), `"${word}" must contain only letters A-Z`);
+  assert(
+    word.length >= MIN_WORD_LENGTH && word.length <= MAX_WORD_LENGTH,
+    `"${word}" must be ${MIN_WORD_LENGTH}-${MAX_WORD_LENGTH} letters long`
+  );
 }
 
 /** Small deterministic string hash -> array index, same technique as
@@ -82,8 +96,8 @@ function emptyBoard(): WordlePlayerBoard {
   return { guesses: [], solved: false, hintUsed: false };
 }
 
-function isBoardFinished(board: WordlePlayerBoard): boolean {
-  return board.solved || board.guesses.length >= MAX_GUESSES;
+function isBoardFinished(board: WordlePlayerBoard, targetWord: string): boolean {
+  return board.solved || board.guesses.length >= maxGuessesFor(targetWord.length);
 }
 
 /** Standard Wordle scoring with correct duplicate-letter handling: a
@@ -91,18 +105,19 @@ function isBoardFinished(board: WordlePlayerBoard): boolean {
  * actually appears unmatched in the target (e.g. guessing "ARRAY" against
  * target "RADAR" shouldn't mark every R as present). */
 function scoreGuess(guess: string, target: string): TileState[] {
-  const tiles: TileState[] = new Array(5).fill("absent");
+  const length = target.length;
+  const tiles: TileState[] = new Array(length).fill("absent");
   const targetChars = target.split("");
   const guessChars = guess.split("");
-  const consumed = new Array(5).fill(false);
+  const consumed = new Array(length).fill(false);
 
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < length; i++) {
     if (guessChars[i] === targetChars[i]) {
       tiles[i] = "correct";
       consumed[i] = true;
     }
   }
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < length; i++) {
     if (tiles[i] === "correct") continue;
     const matchIndex = targetChars.findIndex((c, j) => !consumed[j] && c === guessChars[i]);
     if (matchIndex !== -1) {
@@ -190,13 +205,13 @@ export const wordleEngine: GameEngine<WordleState, WordleAction, WordleRedactedS
         assert(state.phase === "solving", "no solving is happening right now");
         const board = state.boards[actingPlayer];
         assert(board !== undefined, "actingPlayer is not in this game");
-        assert(!isBoardFinished(board), "your board is already finished");
+        const target = state.targetFor[actingPlayer];
+        assert(target !== undefined && target.word !== "", "no target word set for you yet");
+        assert(!isBoardFinished(board, target.word), "your board is already finished");
 
         const guess = normalizeWord(action.word);
         assertValidWord(guess);
-
-        const target = state.targetFor[actingPlayer];
-        assert(target !== undefined && target.word !== "", "no target word set for you yet");
+        assert(guess.length === target.word.length, `guess must be ${target.word.length} letters, matching the target`);
 
         const tiles = scoreGuess(guess, target.word);
         const row: WordleGuessRow = { letters: guess.split(""), tiles };
@@ -204,7 +219,7 @@ export const wordleEngine: GameEngine<WordleState, WordleAction, WordleRedactedS
         const nextBoard: WordlePlayerBoard = { ...board, guesses: [...board.guesses, row], solved };
 
         const boards = { ...state.boards, [actingPlayer]: nextBoard };
-        const allFinished = Object.values(boards).every(isBoardFinished);
+        const allFinished = state.players.every((p) => isBoardFinished(boards[p]!, state.targetFor[p]!.word));
         return { ...state, boards, phase: allFinished ? "done" : "solving" };
       }
 
@@ -236,7 +251,8 @@ export const wordleEngine: GameEngine<WordleState, WordleAction, WordleRedactedS
     const fullyRevealed = ownBoard.solved || state.phase === "done";
     const hintRevealed = fullyRevealed || ownBoard.hintUsed;
 
-    const bothFinished = isBoardFinished(ownBoard) && isBoardFinished(opponentBoard);
+    const opponentTarget = state.targetFor[opponent] ?? emptyTarget();
+    const bothFinished = isBoardFinished(ownBoard, rawTarget.word) && isBoardFinished(opponentBoard, opponentTarget.word);
 
     return {
       players: state.players,
@@ -250,6 +266,13 @@ export const wordleEngine: GameEngine<WordleState, WordleAction, WordleRedactedS
         pack: hintRevealed ? rawTarget.pack : null,
         setterHint: hintRevealed ? rawTarget.setterHint : null,
       },
+      // The word's own length isn't a spoiler the way the word itself is -
+      // the solver needs it up front just to know how many tile boxes to
+      // render (same as seeing N empty boxes in a fixed-length Wordle).
+      // 0 during duel's "setup" phase, before the opponent has typed a
+      // word yet - the client only reads this once `phase === "solving"`.
+      ownTargetLength: rawTarget.word.length,
+      ownMaxGuesses: maxGuessesFor(rawTarget.word.length),
       ownBoard,
       opponentGuessCount: opponentBoard.guesses.length,
       opponentBoard: bothFinished ? opponentBoard : null,

@@ -91,4 +91,23 @@ export const PLACEHOLDER_ENTRIES: WordleEntry[] = [
   { word: "COLON", definition: "The large intestine, where water is absorbed from digested food", pack: "Anatomy", source: "placeholder" },
   { word: "CROUP", definition: "A childhood respiratory infection with a distinctive barking cough", pack: "Pediatrics", source: "placeholder" },
   { word: "LATCH", definition: "How a baby attaches to the breast to feed", pack: "Pediatrics", source: "placeholder" },
+  // Non-5-letter entries, added once custom word lengths were supported
+  // (MIN_WORD_LENGTH/MAX_WORD_LENGTH in games/wordle/engine.ts) - everything
+  // above this line is still exactly 5 letters, kept as-is rather than
+  // reshuffled, so the daily/race hash-index picks above stay stable for
+  // dates already played against this list.
+  { word: "SCAR", definition: "A mark left on skin after a wound has healed", pack: "General", source: "placeholder" },
+  { word: "CAST", definition: "A rigid support worn to protect and immobilize a broken bone", pack: "General", source: "placeholder" },
+  { word: "DRIP", definition: "Common term for an IV line delivering fluids or medication", pack: "Pharmacology", source: "placeholder" },
+  { word: "VEIN", definition: "A blood vessel that carries blood back toward the heart", pack: "Anatomy", source: "placeholder" },
+  { word: "PLASMA", definition: "The straw-colored liquid part of blood that carries cells and proteins", pack: "Anatomy", source: "placeholder" },
+  { word: "TENDON", definition: "A tough cord of tissue connecting muscle to bone", pack: "Anatomy", source: "placeholder" },
+  { word: "MURMUR", definition: "An unusual whooshing sound heard over the heart during a check-up", pack: "General", source: "placeholder" },
+  { word: "RETINA", definition: "The light-sensitive layer at the back of the eye", pack: "Anatomy", source: "placeholder" },
+  { word: "SURGERY", definition: "An operation performed to treat an injury or disease", pack: "General", source: "placeholder" },
+  { word: "ALLERGY", definition: "An immune overreaction to a normally harmless substance", pack: "General", source: "placeholder" },
+  { word: "SYRINGE", definition: "A device used to inject or withdraw fluids through a needle", pack: "Pharmacology", source: "placeholder" },
+  { word: "FRACTURE", definition: "A break in a bone", pack: "Anatomy", source: "placeholder" },
+  { word: "PLACENTA", definition: "The organ that nourishes a fetus during pregnancy", pack: "OB-GYN", source: "placeholder" },
+  { word: "HOSPITAL", definition: "A facility where patients receive medical care", pack: "General", source: "placeholder" },
 ];

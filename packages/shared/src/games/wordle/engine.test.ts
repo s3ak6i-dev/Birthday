@@ -89,6 +89,53 @@ describe("scoring (duplicate letters)", () => {
   });
 });
 
+describe("variable word length", () => {
+  it("scores a 7-letter word across its own full width, not a fixed 5", () => {
+    let state = dailyState("2026-01-02");
+    state = { ...state, targetFor: { [P1]: { ...state.targetFor[P1]!, word: "SURGERY" }, [P2]: state.targetFor[P2]! } };
+    state = guess(state, P1, "SUBTLER");
+    const row = state.boards[P1]!.guesses[0]!;
+    expect(row.letters).toHaveLength(7);
+    expect(row.tiles).toHaveLength(7);
+    // S-U-R-G-E-R-Y vs S-U-B-T-L-E-R: i0/i1 match directly (correct); i2-4
+    // (B/T/L) don't appear in the target at all (absent); i5's E and i6's R
+    // both exist in the target but at different positions (present, not
+    // correct) - target's two Rs (i2, i5) are both still unconsumed at this
+    // point, so i6's R matches the first one, at target index 2.
+    expect(row.tiles).toEqual(["correct", "correct", "absent", "absent", "absent", "present", "present"]);
+  });
+
+  it("gives a 7-letter word 8 guesses (length + 1), not the old flat 6", () => {
+    let state = dailyState("2026-01-02");
+    state = { ...state, targetFor: { [P1]: { ...state.targetFor[P1]!, word: "SURGERY" }, [P2]: state.targetFor[P2]! } };
+    for (let i = 0; i < 7; i++) state = guess(state, P1, "WRONGLY");
+    expect(state.boards[P1]!.guesses).toHaveLength(7);
+    expect(state.boards[P1]!.solved).toBe(false);
+    state = guess(state, P1, "WRONGLY"); // 8th guess - still allowed
+    expect(state.boards[P1]!.guesses).toHaveLength(8);
+    expect(() => guess(state, P1, "WRONGLY")).toThrow(/already finished/); // 9th - budget used up
+  });
+
+  it("rejects a guess whose length doesn't match the target's", () => {
+    let state = dailyState("2026-01-02");
+    state = { ...state, targetFor: { [P1]: { ...state.targetFor[P1]!, word: "SURGERY" }, [P2]: state.targetFor[P2]! } };
+    expect(() => guess(state, P1, "FEVER")).toThrow(/must be 7 letters/);
+  });
+
+  it("duel mode accepts a secret word outside the classic fixed 5, within MIN/MAX_WORD_LENGTH", () => {
+    const state = duelState();
+    // P1 sets P2's word - 7 letters, would've been rejected before custom
+    // lengths existed, should go through now (4-8 is the allowed range).
+    const next = wordleEngine.reduce(state, { type: "setSecretWord", word: "SURGERY" }, P1);
+    expect(next.targetFor[P2]!.word).toBe("SURGERY");
+  });
+
+  it("duel mode still rejects a secret word past MAX_WORD_LENGTH", () => {
+    const state = duelState();
+    expect(() => wordleEngine.reduce(state, { type: "setSecretWord", word: "CLINICIAN" }, P1)).toThrow(/4-8 letters/); // 9 letters
+  });
+});
+
 describe("race mode", () => {
   it("doesn't finish the game until BOTH boards are done, even after one player solves", () => {
     let state = raceState();
@@ -132,7 +179,7 @@ describe("duel setup (FR-53)", () => {
 
   it("rejects an invalid word", () => {
     const state = duelState();
-    expect(() => wordleEngine.reduce(state, { type: "setSecretWord", word: "AB" }, P1)).toThrow(/5 letters/);
+    expect(() => wordleEngine.reduce(state, { type: "setSecretWord", word: "AB" }, P1)).toThrow(/4-8 letters/);
   });
 
   it("rejects guessing before setup is complete", () => {
@@ -216,7 +263,7 @@ describe("redact", () => {
 describe("illegal actions", () => {
   it("rejects a malformed guess", () => {
     const state = dailyState();
-    expect(() => guess(state, P1, "AB")).toThrow(/5 letters/);
+    expect(() => guess(state, P1, "AB")).toThrow(/4-8 letters/);
   });
 
   it("rejects guessing on an already-finished board", () => {

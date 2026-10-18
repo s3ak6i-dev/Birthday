@@ -31,6 +31,14 @@ export interface RoomHandle<TState> {
   selfEmail: string | null;
   endedReason: "abandoned" | "left" | null;
   lastError: string | null;
+  /** The partner's most recent reaction, with a timestamp so the same
+   * emoji sent twice in a row still produces a distinct value a consumer's
+   * effect can react to. Never fires for your own reaction - the server
+   * only relays a "reaction" message to the *other* connection(s) in the
+   * room (ward-room.ts), never echoes it back to the sender; the sender's
+   * own floating toast is shown locally, at the point of calling
+   * `sendReaction`, same as before this field existed. */
+  incomingReaction: { emoji: string; at: number } | null;
   toggleReady: () => void;
   sendAction: (payload: unknown) => void;
   sendReaction: (emoji: string) => void;
@@ -47,6 +55,7 @@ export function useRoom<TState = unknown>(code: string, game: GameId, mode?: str
   const [selfEmail, setSelfEmail] = useState<string | null>(null);
   const [endedReason, setEndedReason] = useState<"abandoned" | "left" | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
+  const [incomingReaction, setIncomingReaction] = useState<{ emoji: string; at: number } | null>(null);
   const socketRef = useRef<PartySocket | null>(null);
 
   useEffect(() => {
@@ -80,6 +89,9 @@ export function useRoom<TState = unknown>(code: string, game: GameId, mode?: str
             return;
           case "state":
             setGameState(msg.state as TState);
+            return;
+          case "reaction":
+            setIncomingReaction({ emoji: msg.emoji, at: Date.now() });
             return;
           case "pause":
             return; // roomState's phase already reflects "paused"
@@ -129,6 +141,7 @@ export function useRoom<TState = unknown>(code: string, game: GameId, mode?: str
     selfEmail,
     endedReason,
     lastError,
+    incomingReaction,
     toggleReady,
     sendAction,
     sendReaction,

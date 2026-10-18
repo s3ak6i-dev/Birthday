@@ -16,6 +16,10 @@ new_sqlite_classes = ["WardRoom"]
 # endpoint (jwt.ts), not a shared secret. See masterdoc.md section 12.2 for
 # the full environment variable table.
 [vars]
-# Comma-separated, checked in index.ts's onBeforeConnect.
-ALLOWED_ORIGIN = "http://localhost:5173,https://drchandraswaitingroom.vercel.app"
+# Comma-separated, checked in index.ts's onBeforeConnect. Several local
+# ports listed, not just 5173 - Vite auto-increments to 5174/5175/etc.
+# whenever the canonical port's already in use by another dev session, so
+# a single hardcoded local port kept breaking local multiplayer testing
+# for no real security benefit (still just localhost either way).
+ALLOWED_ORIGIN = "http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176,https://drchandraswaitingroom.vercel.app"
 SUPABASE_URL = "https://lyappvibyxgtcnqravog.supabase.co"
