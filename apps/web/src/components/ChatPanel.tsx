@@ -1,21 +1,27 @@
-// A small realtime chat bubble between the two players, floating over the
-// Lounge - no masterdoc.md screen/FR for this, built on request (see
-// TODO.md). Backed by Supabase (supabase/migrations/0002_chat.sql), not the
+// A small chat bubble between the two players, floating over the Lounge -
+// no masterdoc.md screen/FR for this, built on request (see TODO.md).
+// Backed by Supabase (supabase/migrations/0002_chat.sql), not the
 // Cloudflare Worker's room protocol: chat needs to persist and be readable
 // any time either player opens the Lounge, not just for the life of one
 // game room, and Postgres+RLS is already this project's home for exactly
 // that kind of shared, persistent state (garden, bond, scoreboard all work
 // the same way).
 //
-// This is also the first use of Supabase Realtime (postgres_changes) in
-// this codebase - every other "realtime" feature here is the bespoke
-// Durable Object WebSocket rooms protocol in apps/rooms, a different
-// transport for a different job (ephemeral, per-room game state).
+// Was Supabase Realtime (postgres_changes) originally - switched to plain
+// REST polling for the same reason the Lounge's character-position sync
+// was (lib/use-lounge-presence.ts's own header comment has the full
+// story): the Realtime WebSocket proved unreliable live on the actual
+// phone/network this runs on (subscribe-status CHANNEL_ERROR, repeated
+// connection failures), and this app is explicitly meant to run primarily
+// on phones. Your own message now appears immediately too (optimistic,
+// off the real inserted row - no round trip needed to see your own send
+// land), which the realtime version never did on its own; it relied on
+// the same subscription round-tripping your own insert back to you.
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ChatIcon, IconButton, MIN_TOUCH_TARGET_PX, palette } from "@ward-games/ui";
 import { supabase } from "../lib/supabase";
 import { useProfiles } from "../lib/use-profiles";
-import { sfxConfirm } from "../lib/sfx";
+import { sfxChatReceive, sfxConfirm } from "../lib/sfx";
 
 interface ChatRow {
   id: string;
@@ -25,6 +31,7 @@ interface ChatRow {
 }
 
 const HISTORY_LIMIT = 50;
+const POLL_INTERVAL_MS = 1500;
 
 export function ChatPanel() {
   const [open, setOpen] = useState(false);
@@ -35,13 +42,24 @@ export function ChatPanel() {
   const { byId: nameById } = useProfiles();
 
   const listRef = useRef<HTMLDivElement>(null);
-  // The realtime subscription callback is set up once (mount-only effect
-  // below) and would otherwise close over `open`'s very first value
-  // forever - a ref is the usual fix for "a long-lived callback needs to
-  // see fresh state" (PlayableCharacter's movement loop uses the same
-  // trick for the same reason).
+  // The poll loop is a long-lived effect (mount-only deps) and would
+  // otherwise close over `open`'s/`selfId`'s very first value forever - a
+  // ref is the usual fix for "a long-lived callback needs to see fresh
+  // state" (PlayableCharacter's movement loop uses the same trick).
   const openRef = useRef(open);
   openRef.current = open;
+  const selfIdRef = useRef(selfId);
+  selfIdRef.current = selfId;
+  // Every message id already shown, so a poll result that re-includes our
+  // own just-sent message (or one already picked up by an earlier poll)
+  // gets deduped instead of appended twice.
+  const seenIdsRef = useRef<Set<string>>(new Set());
+  // The newest message's created_at seen so far - a ref, not read off
+  // `messages` state directly, since the poll loop below is a long-lived
+  // effect that only runs once (mount-only deps); closing over `messages`
+  // there would freeze it at the empty initial render forever instead of
+  // seeing each new message as it arrives.
+  const lastCreatedAtRef = useRef<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -52,37 +70,55 @@ export function ChatPanel() {
   useEffect(() => {
     let cancelled = false;
 
-    supabase
-      .from("chat_messages")
-      .select("id, sender_id, body, created_at")
-      .order("created_at", { ascending: false })
-      .limit(HISTORY_LIMIT)
-      .then(({ data, error }) => {
-        if (cancelled) return;
-        if (error) {
-          console.error("chat history load failed", error);
-          return;
-        }
-        setMessages([...(data ?? [])].reverse());
-      });
+    async function loadHistory() {
+      const { data, error } = await supabase
+        .from("chat_messages")
+        .select("id, sender_id, body, created_at")
+        .order("created_at", { ascending: false })
+        .limit(HISTORY_LIMIT);
+      if (cancelled) return;
+      if (error) {
+        console.error("chat history load failed", error);
+        return;
+      }
+      const rows = [...(data ?? [])].reverse();
+      for (const row of rows) seenIdsRef.current.add(row.id);
+      if (rows.length > 0) lastCreatedAtRef.current = rows[rows.length - 1]!.created_at;
+      setMessages(rows);
+    }
 
-    const channel = supabase
-      .channel("chat_messages")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "chat_messages" },
-        (payload) => {
-          const row = payload.new as ChatRow;
-          setMessages((prev) => [...prev, row].slice(-HISTORY_LIMIT));
-          if (!openRef.current) setUnread(true);
-        },
-      )
-      .subscribe();
+    async function poll() {
+      let query = supabase
+        .from("chat_messages")
+        .select("id, sender_id, body, created_at")
+        .order("created_at", { ascending: true })
+        .limit(HISTORY_LIMIT);
+      if (lastCreatedAtRef.current) query = query.gt("created_at", lastCreatedAtRef.current);
+      const { data, error } = await query;
+      if (cancelled) return;
+      if (error) {
+        console.error("chat poll failed", error);
+        return;
+      }
+      const fresh = (data ?? []).filter((row) => !seenIdsRef.current.has(row.id));
+      if (fresh.length === 0) return;
+      for (const row of fresh) seenIdsRef.current.add(row.id);
+      lastCreatedAtRef.current = fresh[fresh.length - 1]!.created_at;
+      setMessages((prev) => [...prev, ...fresh].slice(-HISTORY_LIMIT));
+      const fromPartner = fresh.some((row) => row.sender_id !== selfIdRef.current);
+      if (fromPartner && !openRef.current) {
+        setUnread(true);
+        sfxChatReceive();
+      }
+    }
 
+    loadHistory();
+    const interval = window.setInterval(poll, POLL_INTERVAL_MS);
     return () => {
       cancelled = true;
-      supabase.removeChannel(channel);
+      window.clearInterval(interval);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally mount-only; poll() reads `messages` fresh via closure each interval tick rather than restarting the interval on every new message
   }, []);
 
   // Auto-scroll to the newest message whenever the panel's open and the
@@ -100,8 +136,20 @@ export function ChatPanel() {
     if (!body || !selfId) return;
     setDraft("");
     sfxConfirm();
-    const { error } = await supabase.from("chat_messages").insert({ sender_id: selfId, body });
-    if (error) console.error("chat send failed", error);
+    const { data, error } = await supabase.from("chat_messages").insert({ sender_id: selfId, body }).select().single();
+    if (error || !data) {
+      console.error("chat send failed", error);
+      return;
+    }
+    // Shows your own message immediately, off the real inserted row -
+    // doesn't wait on the next poll tick, and the id gets deduped against
+    // if that same row comes back on one anyway.
+    if (!seenIdsRef.current.has(data.id)) {
+      seenIdsRef.current.add(data.id);
+      const row = data as ChatRow;
+      lastCreatedAtRef.current = row.created_at;
+      setMessages((prev) => [...prev, row].slice(-HISTORY_LIMIT));
+    }
   }
 
   return (
@@ -139,7 +187,17 @@ export function ChatPanel() {
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
-            zIndex: 3,
+            // Was 3 - far below a sitting/standing character's own
+            // depth-sorted zIndex (PlayableCharacter: pos.top * 10, up to
+            // ~920 for CHARACTER_WANDER_BOX's deepest edge), which could
+            // visually cover the Send button entirely depending on where
+            // in the room a character happened to be standing - caught
+            // live via Playwright (a real click, not a visual glance,
+            // failing with "element intercepts pointer events"), not just
+            // a cosmetic z-fighting issue. 950 sits safely above every
+            // realistic character position but still under the sit
+            // button's 1000 (no real conflict there - different UI areas).
+            zIndex: 950,
             boxShadow: "0 6px 18px rgba(0,0,0,0.4)",
           }}
         >

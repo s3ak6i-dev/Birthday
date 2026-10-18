@@ -81,6 +81,15 @@ export const sfxReactionPop = () => playSound("reaction-pop");
 export const sfxStickerUnlock = () => playSound("sticker-unlock");
 export const sfxDogTap = () => playSound("dog-tap");
 
+// Chat
+// Same underlying sound as the in-game reaction dock (reaction-pop) -
+// already a short, pleasant blip, no need to source a dedicated clip for
+// "a chat notification arrived" when this already reads as exactly that.
+// Deliberately a different name than sfxReactionPop even though it points
+// at the same key, so a ChatPanel call site reads as what it's actually
+// for, not as "reusing the reaction sound for some reason."
+export const sfxChatReceive = () => playSound("reaction-pop");
+
 // Gyna's dialogue blip - passed as `squawkKey` to every `<DialogueScene>`
 // she narrates (every one so far), rather than a bare string literal
 // repeated at each call site.
