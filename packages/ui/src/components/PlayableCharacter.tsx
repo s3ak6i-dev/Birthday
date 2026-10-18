@@ -74,6 +74,15 @@ export interface PlayableCharacterProps {
   bounds: WanderBox;
   /** Where "sit" actually sits them, e.g. the sofa seat cushion - NOT the floor region `bounds` covers, since a cushion sits well above the floor. The sit button walks them here first, then plays the sit-down transition. Omit to fall back to sitting wherever they're currently standing (floor height) instead - and, since there's no one specific spot to be "near" in that case, the button is always available regardless of position. */
   sitSpot?: { left: number; top: number };
+  /** Spawn already seated at `sitSpot` (or at `homeLeft`/`homeTop` if no
+   * `sitSpot` is given - "sit wherever you start" rather than "stand
+   * there") instead of the normal idle/standing start - a waiting room's
+   * own characters starting out stood in the middle of the floor read
+   * oddly, see Lounge.tsx. No walk-to-sofa or sit-down animation plays;
+   * this is the already-settled seated pose from the very first frame,
+   * same as `state === "sitting"` renders once actually seated. Ignored
+   * if there's no `frames.sit` to show in the first place. */
+  startSitting?: boolean;
   /** How close (in the same % units as `pos`/`sitSpot`) the character has to be to `sitSpot` before the sit button appears at all - ignored when `sitSpot` is omitted. Defaults to 20, loose enough to cover standing anywhere in front of the sofa without requiring a pixel-exact spot, tight enough that the button isn't just permanently on screen from across the room. */
   sitProximityPct?: number;
   widthPct?: number;
@@ -216,13 +225,16 @@ export function PlayableCharacter({
   onStateChange,
   getBlockingPosition,
   remote,
+  startSitting,
   label = "You",
 }: PlayableCharacterProps) {
   const reduced = useRef(prefersReducedMotion());
   const boxHeightPct = widthPct * boxAspect * STAGE_ASPECT;
+  const hasSitFrames = !!frames.sit && frames.sit.length > 0;
+  const spawnSeated = startSitting && hasSitFrames;
 
-  const [state, setState] = useState<CharState>("idle");
-  const [pos, setPos] = useState({ left: homeLeft, top: homeTop });
+  const [state, setState] = useState<CharState>(spawnSeated ? "sitting" : "idle");
+  const [pos, setPos] = useState(spawnSeated ? (sitSpot ?? { left: homeLeft, top: homeTop }) : { left: homeLeft, top: homeTop });
   // All four compass directions now, not just left/right - "up"/"down" pick
   // the new front/back-facing frame sets (see PlayableCharacterFrames) when
   // a character has them, falling back to the original walkRight/idle for
@@ -231,7 +243,11 @@ export function PlayableCharacter({
   const [idleFrame, setIdleFrame] = useState(0);
   const [walkFrame, setWalkFrame] = useState(0);
   const [waveFrame, setWaveFrame] = useState(0);
-  const [sitFrame, setSitFrame] = useState(0);
+  // The already-settled seated pose (sit frames played forward end on
+  // their last frame and hold there - see the sitting-down effect below) -
+  // starting here instead of 0 is what skips the walk-to-sofa/sit-down
+  // animation and spawns already seated.
+  const [sitFrame, setSitFrame] = useState(spawnSeated ? frames.sit!.length - 1 : 0);
 
   const posRef = useRef(pos);
   posRef.current = pos;

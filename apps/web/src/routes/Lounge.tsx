@@ -524,6 +524,7 @@ export function Lounge() {
                 {...sharedCharacterProps(profileCharacter.id)}
                 homeLeft={50}
                 homeTop={76}
+                startSitting
                 label={profileCharacter.label}
                 onStateChange={(pos, facing, state) => broadcastSelf(pos, facing, state, scrubColorHexFor(profileCharacter.id))}
                 getBlockingPosition={() => partnerState?.pos ?? null}
@@ -548,6 +549,7 @@ export function Lounge() {
                   {...sharedCharacterProps(partnerCharacter.id)}
                   homeLeft={partnerState.pos.left}
                   homeTop={partnerState.pos.top}
+                  startSitting
                   label={partnerCharacter.label}
                   remote={partnerState}
                   scrubColorHex={partnerState.scrubColorHex}
