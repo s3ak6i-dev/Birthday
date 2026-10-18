@@ -89,15 +89,47 @@ export interface PlayableCharacterProps {
   keys?: "arrows" | "wasd";
   /** Recolors the sprite's scrub-fabric pixels to this hex color at runtime (see ../recolor.ts) - the chosen Avatar Setup scrub color, or omit to render the plain gray frames as-shipped. Skip passing this for "classic gray" specifically: it's already the source art's own color, recoloring it to itself would just waste a canvas pass for no visible change. */
   scrubColorHex?: string;
-  /** Called every time this character's own tracked position (feet, same coordinates as everywhere else in this file) changes - lets a parent rendering more than one PlayableCharacter at once (today: Lounge.tsx's `?dual=1` dev view) track where each one currently is, to feed into the OTHER instance's `getBlockingPosition`. Omit if nothing needs to know - the normal single-character case doesn't. A plain callback, not state: this fires from inside the per-frame movement loop, so wrapping it in `useState` upstream would mean a React re-render every single frame something moves. */
-  onPositionChange?: (pos: { left: number; top: number }) => void;
-  /** Called once per movement-loop tick to ask "is anything else currently occupying the floor near where I'm about to step" - return the other character's current position to block against it, or null/undefined for "nothing to block against" (the normal single-character case, or if the other character hasn't reported a position yet). A getter function rather than a plain position value for the same reason as `onPositionChange`: read fresh every tick via a ref, not a prop that would need to flow through React state and risk being a frame stale. */
+  /** Called whenever this character's own tracked pos/facing/state changes
+   * - lets a parent rendering more than one PlayableCharacter at once
+   * track what each one is currently doing, both for the dev-only
+   * `?dual=1` view's `getBlockingPosition` (only `pos` matters there) and
+   * for real cross-device sync, where the full snapshot gets broadcast to
+   * the partner's device and fed into their `remote` prop below. Omit if
+   * nothing needs to know - the normal unobserved single-character case
+   * doesn't. Fires from a `useEffect` keyed on [pos, facing, state], not
+   * inline from the per-frame movement loop - a few React commits behind
+   * the rawest possible timing, not a perceptible difference for either
+   * consumer, and far simpler than threading it through every place those
+   * three could change (movement, sitting, waving, keyboard vs. tap). */
+  onStateChange?: (pos: { left: number; top: number }, facing: Dir, state: CharState) => void;
+  /** Called once per movement-loop tick to ask "is anything else currently occupying the floor near where I'm about to step" - return the other character's current position to block against it, or null/undefined for "nothing to block against" (the normal single-character case, or if the other character hasn't reported a position yet). A getter function rather than a plain position value for the same reason as `onStateChange`: read fresh every tick via a ref, not a prop that would need to flow through React state and risk being a frame stale. */
   getBlockingPosition?: () => { left: number; top: number } | null | undefined;
+  /** Renders this instance as a partner's character mirrored from their
+   * own device instead of local input - no keyboard listener, no
+   * floor-tap-to-move, no self-tap wave, no sit button (this device's
+   * player never directly controls someone else's character, only their
+   * own). Position eases toward each new value instead of snapping to it,
+   * so an infrequently-broadcast position still reads as smooth walking;
+   * `facing`/`state` apply immediately, since there's nothing to ease
+   * about a discrete value. Omit for the normal, locally-controlled case -
+   * the only one `onStateChange` above actually fires for. */
+  remote?: RemoteCharacterState;
   label?: string;
 }
 
-type CharState = "idle" | "walking" | "waving" | "sitting-down" | "sitting" | "standing-up";
-type Dir = "up" | "down" | "left" | "right";
+export type CharState = "idle" | "walking" | "waving" | "sitting-down" | "sitting" | "standing-up";
+export type Dir = "up" | "down" | "left" | "right";
+
+/** Everything a remote instance (the `remote` prop below) needs to mirror
+ * a partner's character from their device - exactly the shape `onStateChange`
+ * reports for the locally-controlled instance, so the broadcast payload on
+ * one device can be fed straight into the `remote` prop on the other with
+ * no translation layer in between. */
+export interface RemoteCharacterState {
+  pos: { left: number; top: number };
+  facing: Dir;
+  state: CharState;
+}
 
 // The Lounge stage is a fixed 1672x941 aspect-ratio box (see .ward-lounge-stage
 // in index.css) - needed to convert a box's %-of-width into %-of-height.
@@ -109,6 +141,13 @@ const WAVE_FRAME_MS = 170;
 const SIT_FRAME_MS = 160;
 const MOVE_PCT_PER_MS = 1 / 60; // walk speed - % of stage per ms, matches the previous tap-to-move pace
 const ARRIVE_EPSILON_PCT = 0.3; // close enough to a tap target to call it "arrived"
+// Remote-character easing (see the `remote` prop) - how fast this instance
+// catches up to each new broadcast, not how fast the *real* character on
+// the other device is walking (that's whatever MOVE_PCT_PER_MS produced on
+// their end, baked into the positions it's broadcasting).
+const REMOTE_EASE_PER_SEC = 10; // fraction of the remaining gap closed per second
+const REMOTE_SNAP_EPSILON_PCT = 0.05; // closer than this: snap exactly rather than asymptotically crawl the last sliver forever
+const REMOTE_SNAP_DISTANCE_PCT = 15; // farther than this: snap instantly rather than visibly glide across the whole room (first sync, or a long gap since the last broadcast)
 
 const ARROW_KEY_TO_DIR: Record<string, Dir> = {
   ArrowUp: "up",
@@ -165,8 +204,9 @@ export function PlayableCharacter({
   sitHeadOffsetPct,
   keys,
   scrubColorHex,
-  onPositionChange,
+  onStateChange,
   getBlockingPosition,
+  remote,
   label = "You",
 }: PlayableCharacterProps) {
   const reduced = useRef(prefersReducedMotion());
@@ -196,6 +236,11 @@ export function PlayableCharacter({
   // every other piece of state that loop needs, same reason as posRef etc.
   const sitSpotRef = useRef(sitSpot);
   sitSpotRef.current = sitSpot;
+  // Same reasoning as sitSpotRef - the movement-loop effect below only
+  // restarts on [bounds], so a `remote` update needs a ref to stay fresh
+  // inside it rather than closing over a stale render's value.
+  const remoteRef = useRef(remote);
+  remoteRef.current = remote;
   const heldDirsRef = useRef<Set<Dir>>(new Set());
   const tapTargetRef = useRef<{ left: number; top: number } | null>(null);
   const pendingSitRef = useRef(false); // set while walking toward sitSpot - the movement loop checks this on arrival instead of always going idle
@@ -210,8 +255,8 @@ export function PlayableCharacter({
   // render closure would risk calling a stale (or, on the very first
   // render before a parent's own state settles, possibly different)
   // function instead of whatever the latest render actually passed.
-  const onPositionChangeRef = useRef(onPositionChange);
-  onPositionChangeRef.current = onPositionChange;
+  const onStateChangeRef = useRef(onStateChange);
+  onStateChangeRef.current = onStateChange;
   const getBlockingPositionRef = useRef(getBlockingPosition);
   getBlockingPositionRef.current = getBlockingPosition;
 
@@ -258,15 +303,15 @@ export function PlayableCharacter({
     else sitDown();
   }
 
-  // Reports the starting position once on mount, so another character
-  // rendered alongside this one (see getBlockingPosition/onPositionChange
-  // above) has something real to block against from the very first
-  // frame, instead of only learning where this one is after it first
-  // moves.
+  // Reports pos/facing/state on mount and every time any of the three
+  // actually changes thereafter, so another character rendered alongside
+  // this one (see getBlockingPosition/onStateChange above) always has a
+  // real, current snapshot to either block against or broadcast - mount
+  // included, so there's something to go on from the very first frame
+  // instead of only learning where this one is after it first moves.
   useEffect(() => {
-    onPositionChangeRef.current?.(posRef.current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only, by design
-  }, []);
+    onStateChangeRef.current?.(pos, facing, state);
+  }, [pos, facing, state]);
 
   // Idle breathing loop.
   useEffect(() => {
@@ -362,7 +407,7 @@ export function PlayableCharacter({
   // scroll the page (the Lounge's portrait-phone layout is horizontally
   // pannable, see index.css) or move focus.
   useEffect(() => {
-    if (reduced.current) return;
+    if (reduced.current || remote) return; // remote: this device's keyboard never drives someone else's character
     // Only when two instances are sharing the page for dev/testing (see
     // `keys` above) does this need to be restricted to one key set -
     // the normal single-character case still listens to both.
@@ -405,6 +450,21 @@ export function PlayableCharacter({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- frames.sit and keys are both stable per mount (set once by the caller), reading them fresh here would re-attach listeners on every render for no reason
   }, []);
+
+  // Remote: facing/state apply immediately, straight off each broadcast -
+  // unlike `pos` (eased in the movement loop below), there's nothing to
+  // smooth about a discrete value flipping from one to another.
+  useEffect(() => {
+    if (!remote) return;
+    if (facingRef.current !== remote.facing) {
+      facingRef.current = remote.facing;
+      setFacing(remote.facing);
+    }
+    if (stateRef.current !== remote.state) {
+      stateRef.current = remote.state;
+      setState(remote.state);
+    }
+  }, [remote?.facing, remote?.state]);
 
   // The one real movement loop - both held-key input and an in-flight tap
   // target are resolved here, every frame, so there's exactly one thing
@@ -457,6 +517,37 @@ export function PlayableCharacter({
       lastT = now;
       raf = requestAnimationFrame(tick);
 
+      // Remote: ease pos toward each new broadcast instead of reading
+      // local input at all - a completely different tick body, not just a
+      // different movement source, since none of the input/collision
+      // logic below applies to a character nothing here is driving.
+      // Linear-per-second easing (not a fixed step like real walking,
+      // which has a constant speed) so it naturally slows as it nears the
+      // target instead of overshooting and correcting every tick. Two
+      // escape hatches around that: close enough (REMOTE_SNAP_EPSILON_PCT)
+      // snaps exactly rather than asymptotically crawling the last sliver
+      // forever, and too far (REMOTE_SNAP_DISTANCE_PCT - a first sync, or
+      // a long gap since the last broadcast) snaps instantly rather than
+      // visibly gliding all the way across the room.
+      const remoteTarget = remoteRef.current;
+      if (remoteTarget) {
+        const dx = remoteTarget.pos.left - posRef.current.left;
+        const dy = remoteTarget.pos.top - posRef.current.top;
+        const distance = Math.hypot(dx, dy);
+        if (distance > 0) {
+          if (distance <= REMOTE_SNAP_EPSILON_PCT || distance > REMOTE_SNAP_DISTANCE_PCT) {
+            posRef.current = remoteTarget.pos;
+            setPos(remoteTarget.pos);
+          } else {
+            const ease = Math.min(1, (REMOTE_EASE_PER_SEC * dt) / 1000);
+            const next = { left: posRef.current.left + dx * ease, top: posRef.current.top + dy * ease };
+            posRef.current = next;
+            setPos(next);
+          }
+        }
+        return;
+      }
+
       if (stateRef.current === "waving" || SITTING_STATES.has(stateRef.current)) return; // don't move mid-reaction/mid-sit
 
       const held = heldDirsRef.current;
@@ -487,7 +578,6 @@ export function PlayableCharacter({
         }
         posRef.current = next;
         setPos(next);
-        onPositionChangeRef.current?.(next);
         if (stateRef.current !== "walking") {
           stateRef.current = "walking";
           setState("walking");
@@ -511,7 +601,6 @@ export function PlayableCharacter({
           tapTargetRef.current = null;
           posRef.current = arrived;
           setPos(arrived);
-          onPositionChangeRef.current?.(arrived);
           if (sitApproachRef.current && sitSpotRef.current) {
             // Arrived at the floor point right in front of the seat - step
             // straight up onto the cushion (no walk-cycle for this, it'd
@@ -521,7 +610,6 @@ export function PlayableCharacter({
             const seat = sitSpotRef.current;
             posRef.current = seat;
             setPos(seat);
-            onPositionChangeRef.current?.(seat);
             pendingSitRef.current = false;
             stateRef.current = "sitting-down";
             setState("sitting-down");
@@ -547,7 +635,6 @@ export function PlayableCharacter({
         }
         posRef.current = next;
         setPos(next);
-        onPositionChangeRef.current?.(next);
         if (stateRef.current !== "walking") {
           stateRef.current = "walking";
           setState("walking");
@@ -738,21 +825,35 @@ export function PlayableCharacter({
 
   return (
     <>
-      <div
-        onClick={handleFloorClick}
-        aria-hidden
-        style={{
-          position: "absolute",
-          left: `${bounds.left}%`,
-          top: `${bounds.top}%`,
-          width: `${bounds.width}%`,
-          height: `${bounds.height}%`,
-          cursor: "pointer",
-        }}
-      />
-      <button type="button" aria-label={label} onClick={handleSelfClick} style={charStyle}>
-        {displaySrc && <img src={displaySrc} alt="" style={imgStyle} />}
-      </button>
+      {/* Remote: no floor click-catcher (this device's taps never queue a
+          destination for someone else's character) and the character
+          itself renders as a plain, non-interactive div instead of a
+          button - a local tap landing on a partner's character shouldn't
+          trigger a wave or anything else from here, only from their own
+          device. */}
+      {!remote && (
+        <div
+          onClick={handleFloorClick}
+          aria-hidden
+          style={{
+            position: "absolute",
+            left: `${bounds.left}%`,
+            top: `${bounds.top}%`,
+            width: `${bounds.width}%`,
+            height: `${bounds.height}%`,
+            cursor: "pointer",
+          }}
+        />
+      )}
+      {remote ? (
+        <div aria-label={label} style={{ ...charStyle, cursor: "default" }}>
+          {displaySrc && <img src={displaySrc} alt="" style={imgStyle} />}
+        </div>
+      ) : (
+        <button type="button" aria-label={label} onClick={handleSelfClick} style={charStyle}>
+          {displaySrc && <img src={displaySrc} alt="" style={imgStyle} />}
+        </button>
+      )}
       {/* Floats just above the character's own head (headTopPct above),
           tracking position same as the character itself - an earlier
           version used a fixed screen position instead, specifically
@@ -770,7 +871,8 @@ export function PlayableCharacter({
           it was on screen the entire time regardless of where in the room
           the character stood, reading as "sit" being available anywhere
           rather than something tied to the sofa specifically. */}
-      {frames.sit &&
+      {!remote &&
+        frames.sit &&
         frames.sit.length > 0 &&
         (state === "sitting" ||
           (state === "idle" &&

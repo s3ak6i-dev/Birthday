@@ -48,6 +48,7 @@ import { SCRUB_COLORS, loadAvatarConfig } from "../lib/avatar-options";
 import { GYNA_PORTRAITS } from "../lib/gyna-portraits";
 import { GATE_INTRO } from "./gate-intro";
 import { GYNA_SQUAWK_KEY, GYNA_TYPE_KEY } from "../lib/sfx";
+import { useLoungePresence } from "../lib/use-lounge-presence";
 
 // The Gate screen (character picker + sign-in) and its entrance video are
 // gone (explicit request: "remove the gate and the animation, but keep
@@ -283,6 +284,15 @@ export function Lounge() {
   // characterForEmail). Falls back to the plain AvatarIcon while that
   // lookup is in flight or if nobody's signed in.
   const [profileCharacter, setProfileCharacter] = useState<CharacterLogin | null>(null);
+  // Cross-device sync: "I don't see Surya on the screen and the movements
+  // syncing" - PlayableCharacter only ever drove one, purely local
+  // character before this; see use-lounge-presence.ts for the actual
+  // broadcast/presence wiring. `profileCharacter.id` ("surya"/"lakshmi")
+  // doubles as the presence key - stable per account, no need for the raw
+  // Supabase user id just to tell the two players apart in a room of
+  // exactly two fixed accounts (D8).
+  const { partnerState, broadcastSelf } = useLoungePresence(profileCharacter?.id ?? null);
+  const partnerCharacter = profileCharacter ? CHARACTERS.find((c) => c.id !== profileCharacter.id) : undefined;
   // Sign-in now lives here instead of a separate /gate screen (see the
   // header comment above) - "needs-signin" drives the inline picker
   // overlay below, same way Gate.tsx's own render used to gate on
@@ -485,7 +495,7 @@ export function Lounge() {
               homeTop={76}
               keys="arrows"
               label="Surya"
-              onPositionChange={(p) => {
+              onStateChange={(p) => {
                 suryaPosRef.current = p;
               }}
               getBlockingPosition={() => lakshmiPosRef.current}
@@ -496,7 +506,7 @@ export function Lounge() {
               homeTop={76}
               keys="wasd"
               label="Lakshmi"
-              onPositionChange={(p) => {
+              onStateChange={(p) => {
                 lakshmiPosRef.current = p;
               }}
               getBlockingPosition={() => suryaPosRef.current}
@@ -504,7 +514,31 @@ export function Lounge() {
           </>
         ) : (
           profileCharacter && (
-            <PlayableCharacter {...sharedCharacterProps(profileCharacter.id)} homeLeft={50} homeTop={76} label={profileCharacter.label} />
+            <>
+              <PlayableCharacter
+                {...sharedCharacterProps(profileCharacter.id)}
+                homeLeft={50}
+                homeTop={76}
+                label={profileCharacter.label}
+                onStateChange={broadcastSelf}
+                getBlockingPosition={() => partnerState?.pos ?? null}
+              />
+              {/* Only rendered once the partner's actually broadcasting
+                  from the Lounge right now (partnerState null otherwise -
+                  including the first ~100ms before their first broadcast
+                  lands, or if they're simply not here) - a stale last-known
+                  position never lingers on screen after they leave. */}
+              {partnerCharacter && partnerState && (
+                <PlayableCharacter
+                  key={partnerCharacter.id}
+                  {...sharedCharacterProps(partnerCharacter.id)}
+                  homeLeft={partnerState.pos.left}
+                  homeTop={partnerState.pos.top}
+                  label={partnerCharacter.label}
+                  remote={partnerState}
+                />
+              )}
+            </>
           )
         )}
 
