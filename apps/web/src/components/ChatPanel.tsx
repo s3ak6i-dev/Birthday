@@ -43,11 +43,9 @@ export function ChatPanel() {
 
   const listRef = useRef<HTMLDivElement>(null);
   // The poll loop is a long-lived effect (mount-only deps) and would
-  // otherwise close over `open`'s/`selfId`'s very first value forever - a
-  // ref is the usual fix for "a long-lived callback needs to see fresh
-  // state" (PlayableCharacter's movement loop uses the same trick).
-  const openRef = useRef(open);
-  openRef.current = open;
+  // otherwise close over `selfId`'s very first value forever - a ref is
+  // the usual fix for "a long-lived callback needs to see fresh state"
+  // (PlayableCharacter's movement loop uses the same trick).
   const selfIdRef = useRef(selfId);
   selfIdRef.current = selfId;
   // Every message id already shown, so a poll result that re-includes our
@@ -105,8 +103,15 @@ export function ChatPanel() {
       for (const row of fresh) seenIdsRef.current.add(row.id);
       lastCreatedAtRef.current = fresh[fresh.length - 1]!.created_at;
       setMessages((prev) => [...prev, ...fresh].slice(-HISTORY_LIMIT));
+      // Always notify on a partner message, not just while the panel's
+      // closed - a direct ask ("instant notification... both with a dot
+      // and a sound"), and simpler than trying to reason about exactly
+      // when the panel was open relative to when a message landed. If the
+      // panel's already open, the dot set here gets cleared again right
+      // away by the effect below (open && messages change) - the sound
+      // still plays either way, same as any other chat app's message tone.
       const fromPartner = fresh.some((row) => row.sender_id !== selfIdRef.current);
-      if (fromPartner && !openRef.current) {
+      if (fromPartner) {
         setUnread(true);
         sfxChatReceive();
       }
