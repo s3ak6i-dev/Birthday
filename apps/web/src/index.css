@@ -215,6 +215,6 @@ img {
   .ward-lounge-stage {
     flex: none;
     width: auto;
-    height: 70%;
+    height: 100%;
   }
 }
