@@ -121,14 +121,23 @@ export type CharState = "idle" | "walking" | "waving" | "sitting-down" | "sittin
 export type Dir = "up" | "down" | "left" | "right";
 
 /** Everything a remote instance (the `remote` prop below) needs to mirror
- * a partner's character from their device - exactly the shape `onStateChange`
- * reports for the locally-controlled instance, so the broadcast payload on
- * one device can be fed straight into the `remote` prop on the other with
- * no translation layer in between. */
+ * a partner's character from their device - `pos`/`facing`/`state` are
+ * exactly the shape `onStateChange` reports for the locally-controlled
+ * instance, so that callback's output feeds straight into this prop on
+ * the other device with no translation layer in between. `scrubColorHex`
+ * isn't part of that movement loop at all (it's a static-per-session
+ * Avatar Setup choice, not something PlayableCharacter tracks itself) but
+ * belongs here anyway: it's the other half of "render this character
+ * correctly" a `remote` instance needs, and the Avatar Setup color choice
+ * itself lives in each device's own localStorage with no sync of its own
+ * - without this, a remote character always rendered in the plain gray
+ * default regardless of what the real player actually picked, caught
+ * live ("the pink of lakshmi is not rendering on Surya's screen"). */
 export interface RemoteCharacterState {
   pos: { left: number; top: number };
   facing: Dir;
   state: CharState;
+  scrubColorHex?: string;
 }
 
 // The Lounge stage is a fixed 1672x941 aspect-ratio box (see .ward-lounge-stage

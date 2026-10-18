@@ -60,6 +60,7 @@ interface PresenceRow {
   pos_top: number;
   facing: Dir;
   state: CharState;
+  scrub_color: string | null;
   updated_at: string;
 }
 
@@ -94,10 +95,15 @@ export interface LoungePresence {
    * joined this session, left cleanly, or gone stale per STALE_MS), not
    * merely "hasn't moved yet." */
   partnerState: RemoteCharacterState | null;
-  /** Feed PlayableCharacter's `onStateChange` straight into this -
-   * internally throttled, so it's safe to call on every pos/facing/state
-   * change without worrying about writing too often. */
-  broadcastSelf: (pos: { left: number; top: number }, facing: Dir, state: CharState) => void;
+  /** Feed PlayableCharacter's `onStateChange` straight into the first
+   * three args - internally throttled, so it's safe to call on every
+   * pos/facing/state change without worrying about writing too often.
+   * `scrubColorHex` is separate from that movement callback (Avatar
+   * Setup's choice is static per session, not something PlayableCharacter
+   * tracks) - pass it every call anyway, it's cheap, and it rides along
+   * on whatever write was already about to happen rather than needing its
+   * own throttling/timing logic. */
+  broadcastSelf: (pos: { left: number; top: number }, facing: Dir, state: CharState, scrubColorHex?: string) => void;
 }
 
 export function useLoungePresence(selfId: string | null): LoungePresence {
@@ -109,7 +115,9 @@ export function useLoungePresence(selfId: string | null): LoungePresence {
   // tracks facing/state, for the "did the discrete part change" check);
   // this needs the full triple, including pos, since the heartbeat has to
   // send a real row, not just know whether to skip.
-  const lastKnownRef = useRef<{ pos: { left: number; top: number }; facing: Dir; state: CharState } | null>(null);
+  const lastKnownRef = useRef<{ pos: { left: number; top: number }; facing: Dir; state: CharState; scrubColorHex?: string } | null>(
+    null
+  );
 
   useEffect(() => {
     if (!selfId) return;
@@ -136,11 +144,24 @@ export function useLoungePresence(selfId: string | null): LoungePresence {
         setPartnerState(null);
         return;
       }
-      setPartnerState({ pos: { left: row.pos_left, top: row.pos_top }, facing: row.facing, state: row.state });
+      setPartnerState({
+        pos: { left: row.pos_left, top: row.pos_top },
+        facing: row.facing,
+        state: row.state,
+        scrubColorHex: row.scrub_color ?? undefined,
+      });
     }
 
-    function writeRow(pos: { left: number; top: number }, facing: Dir, state: CharState) {
-      const row = { user_id: myId, pos_left: pos.left, pos_top: pos.top, facing, state, updated_at: new Date().toISOString() };
+    function writeRow(pos: { left: number; top: number }, facing: Dir, state: CharState, scrubColorHex?: string) {
+      const row = {
+        user_id: myId,
+        pos_left: pos.left,
+        pos_top: pos.top,
+        facing,
+        state,
+        scrub_color: scrubColorHex ?? null,
+        updated_at: new Date().toISOString(),
+      };
       logEvent("write", row);
       supabase
         .from(TABLE)
@@ -158,7 +179,7 @@ export function useLoungePresence(selfId: string | null): LoungePresence {
     // report yet), this is a harmless no-op.
     const heartbeatTimer = window.setInterval(() => {
       if (!lastKnownRef.current) return;
-      writeRow(lastKnownRef.current.pos, lastKnownRef.current.facing, lastKnownRef.current.state);
+      writeRow(lastKnownRef.current.pos, lastKnownRef.current.facing, lastKnownRef.current.state, lastKnownRef.current.scrubColorHex);
     }, HEARTBEAT_MS);
 
     return () => {
@@ -183,8 +204,8 @@ export function useLoungePresence(selfId: string | null): LoungePresence {
   }, [selfId]);
 
   const broadcastSelf = useCallback(
-    (pos: { left: number; top: number }, facing: Dir, state: CharState) => {
-      lastKnownRef.current = { pos, facing, state }; // always kept fresh, for the heartbeat to resend
+    (pos: { left: number; top: number }, facing: Dir, state: CharState, scrubColorHex?: string) => {
+      lastKnownRef.current = { pos, facing, state, scrubColorHex }; // always kept fresh, for the heartbeat to resend
       if (!selfId) return;
       const now = Date.now();
       const last = lastWriteDiscreteRef.current;
@@ -198,6 +219,7 @@ export function useLoungePresence(selfId: string | null): LoungePresence {
         pos_top: pos.top,
         facing,
         state,
+        scrub_color: scrubColorHex ?? null,
         updated_at: new Date().toISOString(),
       };
       logEvent("write", row);

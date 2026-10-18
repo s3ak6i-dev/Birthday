@@ -525,14 +525,23 @@ export function Lounge() {
                 homeLeft={50}
                 homeTop={76}
                 label={profileCharacter.label}
-                onStateChange={broadcastSelf}
+                onStateChange={(pos, facing, state) => broadcastSelf(pos, facing, state, scrubColorHexFor(profileCharacter.id))}
                 getBlockingPosition={() => partnerState?.pos ?? null}
               />
               {/* Only rendered once the partner's actually broadcasting
                   from the Lounge right now (partnerState null otherwise -
                   including the first ~100ms before their first broadcast
                   lands, or if they're simply not here) - a stale last-known
-                  position never lingers on screen after they leave. */}
+                  position never lingers on screen after they leave.
+                  scrubColorHex explicitly overrides what sharedCharacterProps
+                  set (that reads scrubColorHexFor(partnerCharacter.id), i.e.
+                  THIS device's own localStorage for the partner's account -
+                  almost always unset, since Avatar Setup for their account
+                  normally only ever runs on their own device) with the
+                  color they're actually broadcasting, so their real choice
+                  renders here instead of the plain gray default (caught
+                  live: "the pink of lakshmi is not rendering on Surya's
+                  screen"). */}
               {partnerCharacter && partnerState && (
                 <PlayableCharacter
                   key={partnerCharacter.id}
@@ -541,6 +550,7 @@ export function Lounge() {
                   homeTop={partnerState.pos.top}
                   label={partnerCharacter.label}
                   remote={partnerState}
+                  scrubColorHex={partnerState.scrubColorHex}
                 />
               )}
             </>
