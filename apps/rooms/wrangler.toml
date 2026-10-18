@@ -16,5 +16,9 @@ new_sqlite_classes = ["WardRoom"]
 # endpoint (jwt.ts), not a shared secret. See masterdoc.md section 12.2 for
 # the full environment variable table.
 [vars]
+# Comma-separated, checked in index.ts's onBeforeConnect. ADD YOUR REAL
+# DEPLOYED ORIGIN HERE once the Vercel URL exists (e.g.
+# "http://localhost:5173,https://dr-chandras-waiting-room.vercel.app") and
+# redeploy with `npm run deploy:rooms` - until then, only local dev works.
 ALLOWED_ORIGIN = "http://localhost:5173"
 SUPABASE_URL = "https://lyappvibyxgtcnqravog.supabase.co"

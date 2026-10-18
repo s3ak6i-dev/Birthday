@@ -18,6 +18,19 @@ export default {
       // circuits `routePartykitRequest` before it ever calls the Durable
       // Object's `fetch`, so the upgrade never happens at all.
       onBeforeConnect: async (req) => {
+        // Origin allowlist (masterdoc.md's quality bar table, section 2 -
+        // "Security: ... origin allowlist"). `ALLOWED_ORIGIN` was declared
+        // on `Env` from the start but never actually checked anywhere -
+        // JWT verification alone gated *who*, not *from where*. Comma-
+        // separated so both the local dev origin and the real deployed
+        // site can be allowed at once (see wrangler.toml). The WebSocket
+        // upgrade request's `Origin` header is browser-set and can't be
+        // forged from JS the way an arbitrary fetch header could be.
+        const origin = req.headers.get("Origin");
+        const allowed = env.ALLOWED_ORIGIN.split(",").map((o) => o.trim());
+        if (!origin || !allowed.includes(origin)) {
+          return new Response("Forbidden origin", { status: 403 });
+        }
         const url = new URL(req.url);
         const token = url.searchParams.get("token");
         const userId = await verifySupabaseJwt(token, env.SUPABASE_URL);
