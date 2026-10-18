@@ -40,6 +40,35 @@ interface MovePayload {
   state: RemoteCharacterState;
 }
 
+// Observability for exactly this "why don't I see my partner" class of bug
+// - there's no way to eyeball a WebSocket from the outside, so the first
+// debugging session for this feature (both players actually in the Lounge,
+// still not seeing each other even after confirming chat's own Realtime
+// connection works) needed instrumentation, not another guess. Same
+// pattern lib/audio-debug.ts already uses for "did this sound actually
+// play": log to console AND keep the last N entries on a window global, so
+// either a person with devtools open or a Playwright check can read back
+// what actually happened instead of needing to catch it live.
+export interface LoungePresenceLogEntry {
+  at: number;
+  event: "subscribe-status" | "send" | "receive" | "presence-sync";
+  detail: unknown;
+}
+const MAX_LOG_ENTRIES = 50;
+declare global {
+  interface Window {
+    __loungePresenceLog?: LoungePresenceLogEntry[];
+  }
+}
+function logEvent(event: LoungePresenceLogEntry["event"], detail: unknown) {
+  if (typeof window === "undefined") return;
+  window.__loungePresenceLog = window.__loungePresenceLog ?? [];
+  window.__loungePresenceLog.push({ at: Date.now(), event, detail });
+  if (window.__loungePresenceLog.length > MAX_LOG_ENTRIES) window.__loungePresenceLog.shift();
+  // eslint-disable-next-line no-console
+  console.log(`[lounge-presence] ${event}`, detail);
+}
+
 export interface LoungePresence {
   /** The partner's last-known pos/facing/state, straight off their own
    * broadcasts - null if they're not actually in the Lounge right now
@@ -77,6 +106,7 @@ export function useLoungePresence(selfId: string | null): LoungePresence {
     channelRef.current = channel;
 
     channel.on("broadcast", { event: BROADCAST_EVENT }, ({ payload }: { payload: MovePayload }) => {
+      logEvent("receive", payload);
       if (payload.senderId === myId) return; // shouldn't normally happen, cheap safety net either way
       setPartnerState(payload.state);
     });
@@ -87,7 +117,9 @@ export function useLoungePresence(selfId: string | null): LoungePresence {
     // instead of leaving a stale last-known position on screen forever.
     channel.on("presence", { event: "sync" }, () => {
       const state = channel.presenceState();
-      const partnerStillHere = Object.keys(state).some((key) => key !== myId);
+      const keys = Object.keys(state);
+      const partnerStillHere = keys.some((key) => key !== myId);
+      logEvent("presence-sync", { keys, partnerStillHere });
       if (!partnerStillHere) setPartnerState(null);
     });
 
@@ -95,9 +127,11 @@ export function useLoungePresence(selfId: string | null): LoungePresence {
       if (!pendingRef.current) return;
       const payload: MovePayload = { senderId: myId, state: pendingRef.current };
       channel.send({ type: "broadcast", event: BROADCAST_EVENT, payload });
+      logEvent("send", payload);
     }
 
     channel.subscribe((status) => {
+      logEvent("subscribe-status", status);
       if (status !== "SUBSCRIBED") return;
       channel.track({ online: true });
       flushPending();
@@ -120,14 +154,18 @@ export function useLoungePresence(selfId: string | null): LoungePresence {
     (pos: { left: number; top: number }, facing: Dir, state: CharState) => {
       pendingRef.current = { pos, facing, state }; // always kept fresh, flushed on subscribe if nothing's sent yet
       const channel = channelRef.current;
-      if (!channel || !selfId) return;
+      if (!channel || !selfId) {
+        logEvent("send", { skipped: "no channel yet", pos, facing, state });
+        return;
+      }
       const now = Date.now();
       const last = lastSentDiscreteRef.current;
       const discreteChanged = !last || last.facing !== facing || last.state !== state;
-      if (!discreteChanged && now - lastSentAtRef.current < MIN_BROADCAST_INTERVAL_MS) return;
+      if (!discreteChanged && now - lastSentAtRef.current < MIN_BROADCAST_INTERVAL_MS) return; // too frequent, not worth logging every skip
       lastSentAtRef.current = now;
       lastSentDiscreteRef.current = { facing, state };
       const payload: MovePayload = { senderId: selfId, state: { pos, facing, state } };
+      logEvent("send", payload);
       channel.send({ type: "broadcast", event: BROADCAST_EVENT, payload });
     },
     [selfId]
