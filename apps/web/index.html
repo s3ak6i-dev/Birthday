@@ -6,8 +6,21 @@
          and noindex, not from anything requiring a login. -->
     <meta name="robots" content="noindex, nofollow" />
     <link rel="icon" type="image/png" href="/favicon.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Dr. Chandra's Waiting Room</title>
+    <!-- FR-111: installable PWA. vite-plugin-pwa injects the
+         <link rel="manifest"> and service-worker registration itself at
+         build time from vite.config.ts's `manifest` option below - these
+         three are the ones it doesn't cover: Android Chrome's address-bar/
+         splash-screen tint, and iOS Safari's "Add to Home Screen" (which
+         ignores the web manifest's icons and display mode entirely and
+         needs its own apple-* tags for a standalone, no-browser-chrome
+         launch). -->
+    <meta name="theme-color" content="#14101F" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Waiting Room" />
     <!-- index.css's font-family stack has named "Pixelify Sans" since early
          on, but nothing ever actually loaded it - every screen has been
          silently falling back to the generic monospace stack. This is the
