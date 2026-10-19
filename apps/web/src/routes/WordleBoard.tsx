@@ -182,6 +182,15 @@ export function WordleBoard() {
   useEffect(() => {
     if (!canType) return;
     function onKeyDown(e: KeyboardEvent) {
+      // This listener is on `window`, so it fires no matter which element
+      // actually has focus - including the chat panel's message input,
+      // now that ChatPanel.tsx's stacking-context fix means that input
+      // can actually be typed into on this screen. Without this guard,
+      // every keystroke meant for a chat message also landed as a guess
+      // letter (confirmed live: typing "hhJJ" into chat lit up matching
+      // tiles/keys on the board behind it).
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
       if (e.key === "Enter") pressKey("ENTER");
       else if (e.key === "Backspace") pressKey("BACK");
       else if (/^[a-zA-Z]$/.test(e.key)) pressKey(e.key.toUpperCase());

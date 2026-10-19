@@ -244,6 +244,11 @@ export function WordleRoomBoard({
   useEffect(() => {
     if (!canType) return;
     function onKeyDown(e: KeyboardEvent) {
+      // Same guard as WordleBoard.tsx - this listener is on `window`, so
+      // without it every keystroke typed into the chat panel's message
+      // input also landed as a guess letter on the board behind it.
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
       if (e.key === "Enter") pressKey("ENTER");
       else if (e.key === "Backspace") pressKey("BACK");
       else if (/^[a-zA-Z]$/.test(e.key)) pressKey(e.key.toUpperCase());
