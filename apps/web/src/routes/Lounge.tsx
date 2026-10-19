@@ -174,7 +174,7 @@ const CHARACTERS_WITH_IDLE_FRONT_BACK: ReadonlySet<CharacterLogin["id"]> = new S
 // what the count is, it just cycles through whatever array it's given).
 const WALK_RIGHT_FRAME_COUNT: Record<CharacterLogin["id"], number> = { surya: 8, lakshmi: 9 };
 
-function characterWalkFrames(id: CharacterLogin["id"]) {
+function computeCharacterWalkFrames(id: CharacterLogin["id"]) {
   const base = `/characters-walk/${id}`;
   const hasIdleFrontBack = CHARACTERS_WITH_IDLE_FRONT_BACK.has(id);
   const hasWalkFrontBack = CHARACTERS_WITH_WALK_FRONT_BACK.has(id);
@@ -189,6 +189,28 @@ function characterWalkFrames(id: CharacterLogin["id"]) {
     walkForward: hasWalkFrontBack ? [1, 2, 3, 4].map((i) => `${base}/walk-forward-${i}.png`) : undefined,
     walkBackward: hasWalkFrontBack ? [1, 2, 3, 4].map((i) => `${base}/walk-backward-${i}.png`) : undefined,
   };
+}
+
+// Memoized by id (only ever "surya"/"lakshmi", so a plain Map is plenty) -
+// this used to rebuild a fresh object with fresh arrays on every call,
+// and sharedCharacterProps() below calls it inline in JSX on every Lounge
+// render. PlayableCharacter's "play the wave once" effect depends on
+// `frames.wave`'s *identity*, and the Lounge re-renders roughly every
+// 600ms from the presence poll (use-lounge-presence.ts) - each of those
+// renders handed it a new array reference, which restarted the wave
+// animation from frame 0 before it ever reached the end. Confirmed live:
+// reported as a "looping Hi animation" that never actually finishes
+// waving. Caching per id keeps the reference stable across renders so the
+// effect's dependency only ever actually changes when the character
+// (never mid-session) does.
+const walkFramesCache = new Map<CharacterLogin["id"], ReturnType<typeof computeCharacterWalkFrames>>();
+function characterWalkFrames(id: CharacterLogin["id"]) {
+  let frames = walkFramesCache.get(id);
+  if (!frames) {
+    frames = computeCharacterWalkFrames(id);
+    walkFramesCache.set(id, frames);
+  }
+  return frames;
 }
 
 // Measured directly against lounge_dusk.png (1672x941) with a percent grid
