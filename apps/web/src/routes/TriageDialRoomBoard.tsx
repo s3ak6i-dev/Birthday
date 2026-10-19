@@ -26,6 +26,7 @@ import { TRIAGE_DIAL_TUTORIAL } from "./triage-dial-tutorial";
 import { GYNA_PORTRAITS } from "../lib/gyna-portraits";
 import { recordGameResult, unlockSticker } from "../lib/progress";
 import { GYNA_SQUAWK_KEY, GYNA_TYPE_KEY, sfxBullseye, sfxError, sfxLockIn, sfxLose, sfxReveal, sfxStickerUnlock, sfxWin } from "../lib/sfx";
+import { ChatPanel } from "../components/ChatPanel";
 
 const SCORE_BAND_LABEL: Record<number, string> = { 4: "Bullseye!", 3: "Close", 2: "Edge", 0: "Miss" };
 const TUTORIAL_SEEN_KEY = "ward-games:tutorial-seen:triage-dial";
@@ -318,6 +319,7 @@ export function TriageDialRoomBoard({
           ← Lounge
         </Link>
         <PixelButton onClick={() => setShowTutorial(true)}>How to play</PixelButton>
+        <ChatPanel />
         <span style={{ marginLeft: "auto" }}>
           Round {view.round} / 8 · {view.mode === "coop" ? "Co-op" : "Versus"} · Score{" "}
           {view.mode === "coop"

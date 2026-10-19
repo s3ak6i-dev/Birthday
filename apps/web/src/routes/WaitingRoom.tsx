@@ -15,7 +15,7 @@
 // have engine stubs with no board at all (TODO.md M2/M3), so this says so
 // plainly rather than silently falling back to something that isn't
 // actually multiplayer.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { PixelButton, palette } from "@ward-games/ui";
 import { ROOM, type GameId } from "@ward-games/shared";
@@ -54,7 +54,6 @@ export function WaitingRoom() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [selfEmailFallback, setSelfEmailFallback] = useState<string | null>(null);
-  const [floatingReaction, setFloatingReaction] = useState<{ id: number; emoji: string } | null>(null);
   const [countdownText, setCountdownText] = useState("");
 
   const validGame = isGameId(game);
@@ -101,30 +100,22 @@ export function WaitingRoom() {
     return () => cancelAnimationFrame(raf);
   }, [room.countdownEndsAt]);
 
-  // Your own tap: shown immediately, locally, without waiting on a server
-  // round-trip.
+  // Your own tap: sent immediately, locally, without waiting on a server
+  // round-trip. The floating animation itself is handled inside
+  // ReactionDock now (see its own comment) - it owns the button DOM nodes
+  // it needs to measure to spawn a float from the right one.
   function sendReaction(emoji: string) {
     sfxReactionPop();
     room.sendReaction(emoji);
-    setFloatingReaction({ id: Date.now(), emoji: REACTION_GLYPH[emoji] ?? emoji });
-    window.setTimeout(() => setFloatingReaction(null), 1400);
   }
 
   // The partner's reaction: ward-room.ts relays a "reaction" message to
   // every *other* connection in the room (never echoed back to the
   // sender), and useRoom surfaces that as `incomingReaction` - this was the
   // missing half (FR-23 shipped send+relay but never actually displayed
-  // what arrived on the receiving end, see TODO.md). `at` makes the same
-  // emoji sent twice in a row still a distinct dependency value, so the
-  // effect re-fires and restarts the toast's timeout instead of no-op'ing
-  // on an unchanged object.
-  useEffect(() => {
-    if (!room.incomingReaction) return;
-    const { emoji } = room.incomingReaction;
-    setFloatingReaction({ id: room.incomingReaction.at, emoji: REACTION_GLYPH[emoji] ?? emoji });
-    const timer = window.setTimeout(() => setFloatingReaction(null), 1400);
-    return () => window.clearTimeout(timer);
-  }, [room.incomingReaction]);
+  // what arrived on the receiving end, see TODO.md). Passed straight
+  // through to ReactionDock, which spawns a float from its own matching
+  // button the same way a local click does.
 
   if (!validGame || !code) {
     return (
@@ -188,7 +179,7 @@ export function WaitingRoom() {
         <>
           {board}
           {room.phase === "paused" && <ReconnectOverlay onLeave={() => room.leave()} />}
-          <ReactionDock onReact={sendReaction} floating={floatingReaction} />
+          <ReactionDock onReact={sendReaction} incoming={room.incomingReaction} />
         </>
       );
     }
@@ -347,15 +338,58 @@ function ReconnectOverlay({ onLeave }: { onLeave: () => void }) {
   );
 }
 
+interface ReactionFloat {
+  id: number;
+  emoji: string;
+  left: number;
+}
+
 function ReactionDock({
   onReact,
-  floating,
+  incoming,
 }: {
   onReact: (emoji: string) => void;
-  floating: { id: number; emoji: string } | null;
+  incoming: { emoji: string; at: number } | null;
 }) {
+  const [floats, setFloats] = useState<ReactionFloat[]>([]);
+  // One ref per emoji button - spawning a float needs that specific
+  // button's own on-screen position, not a single shared spot, so mashing
+  // the same emoji streams repeatedly up from directly above it instead of
+  // every tap (self or partner's) always rising from one fixed corner.
+  const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+
+  function spawnFloat(emoji: string) {
+    const btn = buttonRefs.current[emoji];
+    if (!btn) return;
+    const rect = btn.getBoundingClientRect();
+    const id = Date.now() + Math.random();
+    setFloats((prev) => [...prev, { id, emoji: REACTION_GLYPH[emoji] ?? emoji, left: rect.left + rect.width / 2 }]);
+    // Floats are appended, never overwritten, so tapping the same emoji
+    // repeatedly stacks several rising at once (a "stream") instead of
+    // each new tap just restarting the one shared float that used to
+    // exist here.
+    window.setTimeout(() => {
+      setFloats((prev) => prev.filter((f) => f.id !== id));
+    }, 1400);
+  }
+
+  function handleClick(emoji: string) {
+    onReact(emoji);
+    spawnFloat(emoji);
+  }
+
+  // `at` makes the same emoji received twice in a row still a distinct
+  // dependency value, so this fires again instead of no-op'ing on an
+  // unchanged object.
+  useEffect(() => {
+    if (!incoming) return;
+    spawnFloat(incoming.emoji);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- spawnFloat closes over current buttonRefs/setFloats, re-created each render is fine; only `incoming` should re-trigger this
+  }, [incoming]);
+
   return (
     <>
+      <style>{`@keyframes ward-float-up { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-60px); opacity: 0; } }`}</style>
       <div
         style={{
           position: "fixed",
@@ -369,7 +403,10 @@ function ReactionDock({
         {ROOM.reactionEmojis.map((emoji) => (
           <button
             key={emoji}
-            onClick={() => onReact(emoji)}
+            ref={(el) => {
+              buttonRefs.current[emoji] = el;
+            }}
+            onClick={() => handleClick(emoji)}
             title={emoji}
             style={{
               fontSize: 20,
@@ -385,23 +422,25 @@ function ReactionDock({
           </button>
         ))}
       </div>
-      {floating && (
+      {floats.map((f) => (
         <div
-          key={floating.id}
+          key={f.id}
           style={{
             position: "fixed",
             bottom: 60,
-            right: 24,
-            fontSize: 32,
+            left: f.left,
+            transform: "translateX(-50%)",
             zIndex: 41,
-            animation: "ward-float-up 1.4s ease-out forwards",
             pointerEvents: "none",
           }}
         >
-          {floating.emoji}
-          <style>{`@keyframes ward-float-up { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-60px); opacity: 0; } }`}</style>
+          {/* The rise animation sets `transform` itself (translateY), which
+              would clobber the translateX(-50%) centering above if both
+              lived on the same element - split across an inner/outer pair
+              so each transform applies independently. */}
+          <div style={{ fontSize: 32, animation: "ward-float-up 1.4s ease-out forwards" }}>{f.emoji}</div>
         </div>
-      )}
+      ))}
     </>
   );
 }

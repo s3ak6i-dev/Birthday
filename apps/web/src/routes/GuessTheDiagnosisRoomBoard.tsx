@@ -22,6 +22,7 @@ import { GUESS_THE_DIAGNOSIS_TUTORIAL } from "./guess-the-diagnosis-tutorial";
 import { GYNA_PORTRAITS } from "../lib/gyna-portraits";
 import { recordGameResult, unlockSticker } from "../lib/progress";
 import { GYNA_SQUAWK_KEY, GYNA_TYPE_KEY, sfxCardSelect, sfxError, sfxLifeline, sfxLose, sfxStickerUnlock, sfxWin } from "../lib/sfx";
+import { ChatPanel } from "../components/ChatPanel";
 
 const TUTORIAL_SEEN_KEY = "ward-games:tutorial-seen:guess-the-diagnosis";
 
@@ -212,6 +213,7 @@ export function GuessTheDiagnosisRoomBoard({
           <Link to="/" style={{ color: palette.white }}>
             ← Lounge
           </Link>
+          <ChatPanel />
           <span style={{ marginLeft: "auto" }}>
             {isMyTurn ? "Your turn" : `${labelFor(view.turn)}'s turn`}
             {isAnswering && " (you must answer)"}
