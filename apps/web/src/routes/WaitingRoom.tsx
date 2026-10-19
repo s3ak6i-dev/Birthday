@@ -22,6 +22,7 @@ import { ROOM, type GameId } from "@ward-games/shared";
 import { useRoom } from "../lib/use-room";
 import { CHARACTERS, characterForEmail } from "../lib/characters";
 import { supabase } from "../lib/supabase";
+import { useProfiles } from "../lib/use-profiles";
 import { sfxCountdownGo, sfxCountdownTick, sfxReactionPop } from "../lib/sfx";
 import { GuessTheDiagnosisRoomBoard } from "./GuessTheDiagnosisRoomBoard";
 import { TriageDialRoomBoard } from "./TriageDialRoomBoard";
@@ -133,8 +134,15 @@ export function WaitingRoom() {
   const selfEmail = room.selfEmail ?? selfEmailFallback;
   const selfCharacter = characterForEmail(selfEmail);
   const partnerCharacter = selfCharacter ? CHARACTERS.find((c) => c.id !== selfCharacter.id) : undefined;
+  // Settings' display-name field writes to this same `profiles` table -
+  // prefer it over the fixed character label so a rename actually shows
+  // up in a live room, not just in chat (ChatPanel already reads the same
+  // table). Falls back to the character label whenever profiles hasn't
+  // loaded yet or someone hasn't set a custom name.
+  const { byId: profileNameById } = useProfiles();
 
   function labelFor(userId: string): string {
+    if (profileNameById[userId]) return profileNameById[userId];
     if (userId === room.selfId) return selfCharacter?.label ?? "You";
     return partnerCharacter?.label ?? "Partner";
   }

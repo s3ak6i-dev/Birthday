@@ -12,12 +12,10 @@ import { WordleBoard } from "./routes/WordleBoard";
 import { GamesList } from "./routes/GamesList";
 import { StickerAlbum } from "./routes/StickerAlbum";
 import { Stats } from "./routes/Stats";
-import { Placeholder } from "./routes/Placeholder";
+import { Settings } from "./routes/Settings";
 import { NotFound } from "./routes/NotFound";
 
 // Route list matches the screen inventory in masterdoc.md section 2.2.
-// /settings is still a placeholder so the persistent nav (FR-11) never
-// 404s while that screen is pending - see TODO.md M4.
 export default function App() {
   return (
     <BrowserRouter>
@@ -53,7 +51,7 @@ export default function App() {
         <Route path="/games" element={<GamesList />} />
         <Route path="/album" element={<StickerAlbum />} />
         <Route path="/stats" element={<Stats />} />
-        <Route path="/settings" element={<Placeholder title="Settings" />} />
+        <Route path="/settings" element={<Settings />} />
         <Route path="/404" element={<NotFound />} />
         <Route path="*" element={<Navigate to="/404" replace />} />
       </Routes>

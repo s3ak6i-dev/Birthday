@@ -5,9 +5,9 @@
 // background it's layered over - see WindowLightProps.
 //
 // Reduced motion (section 2.8) is handled in CSS (.ward-window-light /
-// .ward-dust-mote rules in apps/web/src/index.css), not here, so it works
-// automatically via the OS-level prefers-reduced-motion query even before
-// the real in-app Settings toggle (FR-110) exists.
+// .ward-dust-mote rules in apps/web/src/index.css), not here - both the
+// OS-level prefers-reduced-motion query and the in-app Settings override
+// (motion.ts's `ward-reduced-motion` class, FR-110) are wired there.
 import type { CSSProperties } from "react";
 import type { HotspotRect } from "./Hotspot";
 

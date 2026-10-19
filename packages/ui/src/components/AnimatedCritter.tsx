@@ -32,6 +32,7 @@
 // (this one needs JS since it drives position, not just an animation).
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { palette } from "../tokens";
+import { prefersReducedMotion } from "../motion";
 
 export interface CritterFrames {
   asleep: string;
@@ -92,11 +93,6 @@ function randomBetween(min: number, max: number) {
 
 function pick<T>(arr: T[]): T | undefined {
   return arr.length ? arr[Math.floor(Math.random() * arr.length)] : undefined;
-}
-
-function prefersReducedMotion(): boolean {
-  if (typeof window === "undefined" || !window.matchMedia) return false;
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
 function PlaceholderSilhouette({ pose }: { pose: "lying" | "upright" }) {

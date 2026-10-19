@@ -45,6 +45,7 @@ import { useEffect, useReducer, useRef, useState, type CSSProperties, type Mouse
 import type { WanderBox } from "./AnimatedCritter";
 import { palette } from "../tokens";
 import { getCachedRecolor, recolorSprite } from "../recolor";
+import { prefersReducedMotion } from "../motion";
 
 export interface PlayableCharacterFrames {
   /** Looping idle/breathing pose. */
@@ -191,11 +192,6 @@ const WASD_KEY_TO_DIR: Record<string, Dir> = {
 // Lounge.tsx's `?dual=1`) - without it, both would move together on
 // every keypress, since by default each instance listens for both sets.
 const KEY_TO_DIR: Record<string, Dir> = { ...ARROW_KEY_TO_DIR, ...WASD_KEY_TO_DIR };
-
-function prefersReducedMotion(): boolean {
-  if (typeof window === "undefined" || !window.matchMedia) return false;
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
 
 function isTypingTarget(el: EventTarget | null): boolean {
   const tag = (el as HTMLElement | null)?.tagName;

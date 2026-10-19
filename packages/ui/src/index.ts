@@ -16,3 +16,4 @@ export * from "./components/stat-icons";
 export * from "./sfx";
 export * from "./music";
 export * from "./recolor";
+export * from "./motion";

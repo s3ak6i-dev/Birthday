@@ -8,6 +8,7 @@
 import { getAudioContext, onUnlock } from "./audio-context";
 
 const MUTE_KEY = "ward-games:music-muted";
+const VOLUME_KEY = "ward-games:music-volume";
 const DEFAULT_FADE_IN_MS = 2000;
 const DEFAULT_FADE_OUT_MS = 800;
 
@@ -20,6 +21,12 @@ interface RegisteredTrack {
 
 const tracks = new Map<string, RegisteredTrack>();
 let muted = loadMuted();
+// A user-facing multiplier (0-1, default 1) on top of each track's own
+// author-set `volume` (masterdoc.md FR-110's "music volume" - a real
+// level, not just the on/off mute above). Kept as its own independent
+// scale rather than baked into each track's registered volume so a
+// volume change never has to touch the registry.
+let volumeScale = loadVolumeScale();
 let currentSource: AudioBufferSourceNode | null = null;
 let currentGain: GainNode | null = null;
 let currentKey: string | null = null;
@@ -46,6 +53,17 @@ function loadMuted(): boolean {
     return localStorage.getItem(MUTE_KEY) === "1";
   } catch {
     return false; // storage blocked - default to sound on, never let this throw
+  }
+}
+
+function loadVolumeScale(): number {
+  try {
+    const raw = localStorage.getItem(VOLUME_KEY);
+    if (raw === null) return 1;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? Math.min(1, Math.max(0, parsed)) : 1;
+  } catch {
+    return 1;
   }
 }
 
@@ -122,7 +140,7 @@ async function startMusicNow(key: string, fadeInMs: number): Promise<void> {
   source.buffer = buffer;
   source.loop = true;
   const gain = ctx.createGain();
-  const targetVolume = muted ? 0 : track.volume;
+  const targetVolume = muted ? 0 : track.volume * volumeScale;
   gain.gain.setValueAtTime(0, ctx.currentTime);
   gain.gain.linearRampToValueAtTime(targetVolume, ctx.currentTime + fadeInMs / 1000);
   source.connect(gain).connect(ctx.destination);
@@ -182,7 +200,7 @@ export function setMusicMuted(value: boolean): void {
     const ctx = getAudioContext();
     const track = tracks.get(currentKey);
     if (ctx && track) {
-      const target = value ? 0 : track.volume;
+      const target = value ? 0 : track.volume * volumeScale;
       currentGain.gain.cancelScheduledValues(ctx.currentTime);
       currentGain.gain.setValueAtTime(currentGain.gain.value, ctx.currentTime);
       currentGain.gain.linearRampToValueAtTime(target, ctx.currentTime + 0.3);
@@ -193,4 +211,29 @@ export function setMusicMuted(value: boolean): void {
 export function toggleMusicMuted(): boolean {
   setMusicMuted(!muted);
   return muted;
+}
+
+export function getMusicVolume(): number {
+  return volumeScale;
+}
+
+/** 0-1. Applies immediately to whatever's currently playing, same ramp-
+ * speed as a mute toggle, and persists for the next track/session. */
+export function setMusicVolume(value: number): void {
+  volumeScale = Math.min(1, Math.max(0, value));
+  try {
+    localStorage.setItem(VOLUME_KEY, String(volumeScale));
+  } catch {
+    // ignore, per browser-storage guidance - never let this break the page
+  }
+  if (currentGain && currentKey && !muted) {
+    const ctx = getAudioContext();
+    const track = tracks.get(currentKey);
+    if (ctx && track) {
+      const target = track.volume * volumeScale;
+      currentGain.gain.cancelScheduledValues(ctx.currentTime);
+      currentGain.gain.setValueAtTime(currentGain.gain.value, ctx.currentTime);
+      currentGain.gain.linearRampToValueAtTime(target, ctx.currentTime + 0.1);
+    }
+  }
 }

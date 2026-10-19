@@ -114,6 +114,20 @@ img {
   }
 }
 
+/* Same rules, triggered by the in-app Settings override (packages/ui's
+   motion.ts) instead of the OS-level query above - lets "Reduced motion:
+   On" work even when the OS setting itself is off. There's no equivalent
+   override for forcing motion back *on* against a true OS-level
+   preference - see motion.ts's header comment for why. */
+:root.ward-reduced-motion .ward-window-light {
+  animation: none;
+  transform: translate(-0.5%, 0.5%) scale(1);
+  opacity: 0.7;
+}
+:root.ward-reduced-motion .ward-dust-mote {
+  display: none;
+}
+
 /* DialogueScene's per-line illustration card (packages/ui) - a small pop-in
    each time a new one swaps in, keyed by line so React remounts it and
    retriggers the animation. */
@@ -136,6 +150,9 @@ img {
   .ward-dialogue-card {
     animation: none;
   }
+}
+:root.ward-reduced-motion .ward-dialogue-card {
+  animation: none;
 }
 
 /* Guess the Diagnosis board (local-sim and real-room versions both use

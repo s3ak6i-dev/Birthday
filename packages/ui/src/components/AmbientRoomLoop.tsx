@@ -17,6 +17,7 @@
 // lighting state close to the first's) so wrapping from the last frame
 // back to the first reads as just another ordinary crossfade, not a jump.
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { prefersReducedMotion } from "../motion";
 
 export interface AmbientRoomLoopProps {
   /** Lighting keyframes in chronological order. */
@@ -26,11 +27,6 @@ export interface AmbientRoomLoopProps {
   /** Frame shown, frozen, for prefers-reduced-motion - defaults to frames[0]. Pass the scene's plain unlit background explicitly if `frames` itself never includes it (e.g. a loop that deliberately stays among warmer states). */
   staticFrame?: string;
   alt?: string;
-}
-
-function prefersReducedMotion(): boolean {
-  if (typeof window === "undefined" || !window.matchMedia) return false;
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
 function smoothstep(t: number): number {
