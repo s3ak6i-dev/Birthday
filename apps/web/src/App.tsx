@@ -30,9 +30,18 @@ export default function App() {
         <Route path="/g/triage-dial/play" element={<TriageDialBoard />} />
         {/* Wordle is the one game masterdoc.md gives its own top-level route
             (S16/S17: `/wordle`, not `/g/wordle`) rather than routing it
-            through the generic `/g/:game` namespace like the others. */}
+            through the generic `/g/:game` namespace like the others. A
+            bare `/g/wordle` has no dedicated screen of its own, so without
+            this it falls through to the generic `/g/:game` catch-all
+            (GameIntro.tsx's placeholder stub) below - confirmed live, this
+            is exactly the broken-looking page a stale link/bookmark/typed
+            URL would land on. Redirecting it here instead of just fixing
+            every known link that points at it (already done once, for
+            WaitingRoom.tsx's two "Back to game" links) closes the whole
+            class of it, not just the instances found so far. */}
         <Route path="/wordle" element={<WordleIntro />} />
         <Route path="/wordle/play" element={<WordleBoard />} />
+        <Route path="/g/wordle" element={<Navigate to="/wordle" replace />} />
         {/* S08 waiting room / live room, per masterdoc.md's screen inventory
             path `/g/:game/:code`. React Router v6 ranks static segments
             above dynamic ones at the same position, so the literal
