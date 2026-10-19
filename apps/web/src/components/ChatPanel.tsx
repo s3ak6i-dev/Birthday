@@ -18,10 +18,50 @@
 // land), which the realtime version never did on its own; it relied on
 // the same subscription round-tripping your own insert back to you.
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { ChatIcon, IconButton, MIN_TOUCH_TARGET_PX, palette } from "@ward-games/ui";
+import { createPortal } from "react-dom";
+import { ChatIcon, IconButton, palette } from "@ward-games/ui";
 import { supabase } from "../lib/supabase";
 import { useProfiles } from "../lib/use-profiles";
 import { sfxChatReceive, sfxConfirm } from "../lib/sfx";
+
+// WordleBoard.tsx renders <ChatPanel /> inside a header div that's
+// `position: relative; zIndex: 1`, sitting right before a sibling div
+// (the tile grid) that's ALSO `zIndex: 1`. Equal z-index siblings stack in
+// DOM order, so the grid - later in the DOM - wins the tie and paints
+// above the header and everything nested in it, including a plain
+// dropdown's own zIndex (that z-index only ever gets compared against
+// other things *inside* the header's own stacking context - it never
+// reaches the grid's sibling context at all, no matter how high it is).
+// The grid's tile boxes are visually transparent where empty, so a
+// panel stacked underneath still shows through in the gaps and LOOKS
+// fine - which is exactly how this shipped unnoticed - but the tiles
+// are still real, hit-testable elements on top, so clicks meant for the
+// chat panel land on them instead. Confirmed two ways: a live phone
+// screenshot showing chat bubbles visually interleaved with grid tiles,
+// and a Playwright click on the Send button timing out with "<div> ...
+// subtree intercepts pointer events". A portal to document.body (below)
+// is the fix - it escapes the header's stacking context entirely instead
+// of trying to out-number it.
+//
+// Below this width there's also no empty strip of screen next to the
+// grid/keyboard for a 280px dropdown to sit in without visually
+// overlapping it anyway, so narrow viewports get a full-screen panel
+// instead - a normal "you're in chat now" mobile pattern.
+const NARROW_VIEWPORT_QUERY = "(max-width: 640px)";
+
+function useIsNarrowViewport() {
+  const [narrow, setNarrow] = useState(
+    () => typeof window !== "undefined" && window.matchMedia?.(NARROW_VIEWPORT_QUERY).matches === true,
+  );
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mql = window.matchMedia(NARROW_VIEWPORT_QUERY);
+    const onChange = () => setNarrow(mql.matches);
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, []);
+  return narrow;
+}
 
 interface ChatRow {
   id: string;
@@ -35,6 +75,21 @@ const POLL_INTERVAL_MS = 1500;
 
 export function ChatPanel() {
   const [open, setOpen] = useState(false);
+  const narrow = useIsNarrowViewport();
+  // The dropdown variant portals to document.body (see the header comment
+  // on NARROW_VIEWPORT_QUERY for why), so it can no longer rely on a
+  // position:relative ancestor to anchor itself under the icon button -
+  // it measures the button's own position instead and uses position:fixed
+  // with those coordinates.
+  const anchorRef = useRef<HTMLDivElement>(null);
+  const [anchorRect, setAnchorRect] = useState<{ top: number; left: number } | null>(null);
+  useEffect(() => {
+    if (!open || narrow) return;
+    const el = anchorRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    setAnchorRect({ top: rect.bottom + 8, left: rect.left });
+  }, [open, narrow]);
   const [messages, setMessages] = useState<ChatRow[]>([]);
   const [draft, setDraft] = useState("");
   const [unread, setUnread] = useState(false);
@@ -157,8 +212,106 @@ export function ChatPanel() {
     }
   }
 
+  const messageList = (
+    <div
+      ref={listRef}
+      style={{
+        flex: narrow ? 1 : undefined,
+        maxHeight: narrow ? undefined : 220,
+        minHeight: narrow ? undefined : 80,
+        overflowY: "auto",
+        padding: narrow ? "12px 14px" : "10px 12px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 6,
+      }}
+    >
+      {messages.length === 0 && (
+        <p style={{ margin: 0, fontSize: 12, color: palette.lilacMist, opacity: 0.7 }}>No messages yet - say hi.</p>
+      )}
+      {messages.map((m) => {
+        const mine = m.sender_id === selfId;
+        const name = nameById[m.sender_id] ?? "...";
+        return (
+          <div key={m.id} style={{ alignSelf: mine ? "flex-end" : "flex-start", maxWidth: "85%" }}>
+            <div
+              style={{
+                fontSize: 10,
+                color: palette.lilacMist,
+                opacity: 0.7,
+                marginBottom: 1,
+                textAlign: mine ? "right" : "left",
+              }}
+            >
+              {mine ? "You" : name}
+            </div>
+            <div
+              style={{
+                background: mine ? palette.amethyst : "rgba(255,255,255,0.1)",
+                color: palette.white,
+                borderRadius: 10,
+                padding: "6px 10px",
+                fontSize: 13,
+                lineHeight: 1.35,
+                wordBreak: "break-word",
+              }}
+            >
+              {m.body}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  const composer = (
+    <form
+      onSubmit={handleSend}
+      style={{
+        display: "flex",
+        gap: 6,
+        padding: 8,
+        borderTop: `1px solid rgba(255,255,255,0.15)`,
+      }}
+    >
+      <input
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        placeholder="Message..."
+        maxLength={500}
+        style={{
+          flex: 1,
+          minWidth: 0,
+          background: "rgba(255,255,255,0.08)",
+          border: `1px solid rgba(255,255,255,0.2)`,
+          borderRadius: 8,
+          padding: "6px 8px",
+          color: palette.white,
+          fontSize: 13,
+          fontFamily: "inherit",
+        }}
+      />
+      <button
+        type="submit"
+        disabled={!draft.trim()}
+        style={{
+          background: palette.amethyst,
+          border: "none",
+          borderRadius: 8,
+          padding: "6px 12px",
+          color: palette.white,
+          fontSize: 13,
+          cursor: draft.trim() ? "pointer" : "default",
+          opacity: draft.trim() ? 1 : 0.5,
+        }}
+      >
+        Send
+      </button>
+    </form>
+  );
+
   return (
-    <div style={{ position: "relative" }}>
+    <div ref={anchorRef} style={{ position: "relative" }}>
       <IconButton label={open ? "Close chat" : "Chat"} onClick={() => setOpen((o) => !o)}>
         <ChatIcon />
         {unread && (
@@ -178,130 +331,75 @@ export function ChatPanel() {
         )}
       </IconButton>
 
-      {open && (
-        <div
-          style={{
-            position: "absolute",
-            top: MIN_TOUCH_TARGET_PX + 8,
-            left: 0,
-            width: 280,
-            maxWidth: "80vw",
-            background: "rgba(20,16,31,0.92)",
-            border: `2px solid ${palette.ink}`,
-            borderRadius: 12,
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-            // Was 3 - far below a sitting/standing character's own
-            // depth-sorted zIndex (PlayableCharacter: pos.top * 10, up to
-            // ~920 for CHARACTER_WANDER_BOX's deepest edge), which could
-            // visually cover the Send button entirely depending on where
-            // in the room a character happened to be standing - caught
-            // live via Playwright (a real click, not a visual glance,
-            // failing with "element intercepts pointer events"), not just
-            // a cosmetic z-fighting issue. 950 sits safely above every
-            // realistic character position but still under the sit
-            // button's 1000 (no real conflict there - different UI areas).
-            zIndex: 950,
-            boxShadow: "0 6px 18px rgba(0,0,0,0.4)",
-          }}
-        >
+      {open &&
+        narrow &&
+        createPortal(
           <div
-            ref={listRef}
             style={{
-              maxHeight: 220,
-              minHeight: 80,
-              overflowY: "auto",
-              padding: "10px 12px",
+              position: "fixed",
+              inset: 0,
+              background: "rgba(14,11,22,0.98)",
               display: "flex",
               flexDirection: "column",
-              gap: 6,
+              zIndex: 1001,
             }}
           >
-            {messages.length === 0 && (
-              <p style={{ margin: 0, fontSize: 12, color: palette.lilacMist, opacity: 0.7 }}>
-                No messages yet - say hi.
-              </p>
-            )}
-            {messages.map((m) => {
-              const mine = m.sender_id === selfId;
-              const name = nameById[m.sender_id] ?? "...";
-              return (
-                <div key={m.id} style={{ alignSelf: mine ? "flex-end" : "flex-start", maxWidth: "85%" }}>
-                  <div
-                    style={{
-                      fontSize: 10,
-                      color: palette.lilacMist,
-                      opacity: 0.7,
-                      marginBottom: 1,
-                      textAlign: mine ? "right" : "left",
-                    }}
-                  >
-                    {mine ? "You" : name}
-                  </div>
-                  <div
-                    style={{
-                      background: mine ? palette.amethyst : "rgba(255,255,255,0.1)",
-                      color: palette.white,
-                      borderRadius: 10,
-                      padding: "6px 10px",
-                      fontSize: 13,
-                      lineHeight: 1.35,
-                      wordBreak: "break-word",
-                    }}
-                  >
-                    {m.body}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          <form
-            onSubmit={handleSend}
-            style={{
-              display: "flex",
-              gap: 6,
-              padding: 8,
-              borderTop: `1px solid rgba(255,255,255,0.15)`,
-            }}
-          >
-            <input
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder="Message..."
-              maxLength={500}
+            <div
               style={{
-                flex: 1,
-                minWidth: 0,
-                background: "rgba(255,255,255,0.08)",
-                border: `1px solid rgba(255,255,255,0.2)`,
-                borderRadius: 8,
-                padding: "6px 8px",
-                color: palette.white,
-                fontSize: 13,
-                fontFamily: "inherit",
-              }}
-            />
-            <button
-              type="submit"
-              disabled={!draft.trim()}
-              style={{
-                background: palette.amethyst,
-                border: "none",
-                borderRadius: 8,
-                padding: "6px 12px",
-                color: palette.white,
-                fontSize: 13,
-                cursor: draft.trim() ? "pointer" : "default",
-                opacity: draft.trim() ? 1 : 0.5,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "10px 14px",
+                borderBottom: `1px solid rgba(255,255,255,0.15)`,
               }}
             >
-              Send
-            </button>
-          </form>
-        </div>
-      )}
+              <span style={{ color: palette.white, fontSize: 14, fontWeight: 600 }}>Chat</span>
+              <IconButton label="Hide chat" onClick={() => setOpen(false)} style={{ width: 36, height: 36 }}>
+                <span aria-hidden style={{ color: palette.white, fontSize: 18, lineHeight: 1 }}>
+                  ×
+                </span>
+              </IconButton>
+            </div>
+            {messageList}
+            {composer}
+          </div>,
+          document.body,
+        )}
+
+      {open &&
+        !narrow &&
+        anchorRect &&
+        createPortal(
+          <div
+            style={{
+              position: "fixed",
+              top: anchorRect.top,
+              left: anchorRect.left,
+              width: 280,
+              maxWidth: "80vw",
+              background: "rgba(20,16,31,0.92)",
+              border: `2px solid ${palette.ink}`,
+              borderRadius: 12,
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+              // Portaled to document.body (see the header comment on
+              // NARROW_VIEWPORT_QUERY) and positioned off a measured rect
+              // instead of a position:relative ancestor, so this no longer
+              // sits inside the Wordle board header's own stacking context
+              // and loses z-index ties to its sibling grid. 950 is kept
+              // mainly to still clear a character's own depth-sorted
+              // zIndex on the Lounge (up to ~920) now that it's otherwise
+              // free to be much lower.
+              zIndex: 950,
+              boxShadow: "0 6px 18px rgba(0,0,0,0.4)",
+            }}
+          >
+            {messageList}
+            {composer}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
