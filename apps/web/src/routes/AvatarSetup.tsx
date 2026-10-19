@@ -1,12 +1,16 @@
 // S03 Avatar setup. See masterdoc.md FR-90 and screen inventory section
 // 2.2. "Faces and hair are fixed" - this screen only ever customizes
-// scrubs color and coat on/off; see lib/avatar-options.ts for the scope
-// note on why "scrubs color" is a set of pre-generated sprite pairs rather
-// than live CSS recoloring. The 5-accessory picker this screen used to
-// have was removed - the confirmed look (this screen's actual output) is
-// now also what shows as the profile button on the Lounge, so it stays to
-// just the two choices that look change actually was.
-import { useEffect, useState, type ReactNode } from "react";
+// scrubs color; see lib/avatar-options.ts for the scope note on why
+// that's a set of pre-generated sprites rather than live CSS recoloring.
+// The 5-accessory picker this screen used to have was removed earlier,
+// then the coat toggle that sat alongside scrubs color was removed on
+// request too (see avatar-options.ts's own comment on that) - down to one
+// real choice now, so the layout was redone around that: a single
+// centered column (character picker, then a bigger preview, then the
+// color strip right under it) instead of the old side-by-side
+// preview-plus-panel split, which left a tall mostly-empty panel next to
+// the preview once "Coat" was the only other section in it.
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { PixelButton, palette } from "@ward-games/ui";
 import { CHARACTERS, characterForEmail, type CharacterLogin } from "../lib/characters";
@@ -20,14 +24,13 @@ import {
 } from "../lib/avatar-options";
 import { supabase } from "../lib/supabase";
 
-// Natural aspect ratio (width/height) of each sprite variant - the coat
-// adds some width relative to height, so it isn't quite the same box as
-// the scrubs-only sprite. Hardcoded from the actual exported art rather
-// than measured at runtime, to avoid an async image-load/layout-shift step
-// just to size the preview frame.
-const SPRITE_ASPECT: Record<CharacterId, { scrubs: number; coat: number }> = {
-  lakshmi: { scrubs: 554 / 1468, coat: 555 / 1463 },
-  surya: { scrubs: 569 / 1494, coat: 575 / 1496 },
+// Natural aspect ratio (width/height) of each character's sprite -
+// hardcoded from the actual exported art rather than measured at runtime,
+// to avoid an async image-load/layout-shift step just to size the preview
+// frame.
+const SPRITE_ASPECT: Record<CharacterId, number> = {
+  lakshmi: 554 / 1468,
+  surya: 569 / 1494,
 };
 
 // Reuses the Lounge's own backdrop rather than generating a dedicated room
@@ -35,24 +38,6 @@ const SPRITE_ASPECT: Record<CharacterId, { scrubs: number; coat: number }> = {
 // basically the same cozy room (sofa+pet, sunset window, bookshelf, desk),
 // so a second generation would just be redundant art spend.
 const BACKDROP = "/lounge_dusk.png";
-
-function PanelSection({ icon, title, children }: { icon: string; title: string; children: ReactNode }) {
-  return (
-    <div
-      style={{
-        background: "rgba(20,16,31,0.72)",
-        border: `2px solid ${palette.deepViolet}`,
-        borderRadius: 12,
-        padding: "14px 16px",
-      }}
-    >
-      <h2 style={{ fontSize: 14, margin: "0 0 10px", display: "flex", alignItems: "center", gap: 8 }}>
-        <span aria-hidden>{icon}</span> {title}
-      </h2>
-      {children}
-    </div>
-  );
-}
 
 export function AvatarSetup() {
   const navigate = useNavigate();
@@ -81,7 +66,8 @@ export function AvatarSetup() {
 
   const character = CHARACTERS.find((c: CharacterLogin) => c.id === characterId)!;
   const spriteSrc = getAvatarSpriteSrc(characterId, config);
-  const aspect = config.coatOn ? SPRITE_ASPECT[characterId].coat : SPRITE_ASPECT[characterId].scrubs;
+  const aspect = SPRITE_ASPECT[characterId];
+  const selectedColor = SCRUB_COLORS.find((c) => c.id === config.scrubColorId) ?? SCRUB_COLORS[0]!;
 
   return (
     <main style={{ position: "relative", minHeight: "100vh", color: palette.white, padding: "24px 16px" }}>
@@ -124,7 +110,7 @@ export function AvatarSetup() {
           </span>
         </h1>
         <p style={{ textAlign: "center", opacity: 0.85, fontSize: 13, margin: "0 0 22px" }}>
-          Faces and hair are fixed - scrubs and coat are yours to pick.
+          Faces and hair are fixed - scrubs color is yours to pick.
         </p>
 
         <div style={{ display: "flex", justifyContent: "center", gap: 12, marginBottom: 24 }}>
@@ -167,16 +153,22 @@ export function AvatarSetup() {
           })}
         </div>
 
-        <div style={{ display: "flex", gap: 28, justifyContent: "center", flexWrap: "wrap" }}>
-          {/* Live preview */}
+        {/* Single centered column - scrubs color is the only customization
+            left now, so the old side-by-side preview+panel split just left
+            a tall, mostly-empty panel once "Coat" was gone. The preview
+            takes center stage and the color picker sits directly under it
+            as one card, same visual weight as the rest of this screen's
+            panels but without a second one competing for space. */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 20 }}>
           <div
             style={{
               position: "relative",
-              height: "min(60vh, 520px)",
+              height: "min(56vh, 460px)",
               aspectRatio: aspect,
               background: "rgba(20,16,31,0.55)",
               border: `3px solid ${palette.violet}`,
               borderRadius: 16,
+              boxShadow: "0 0 48px rgba(160,108,213,0.22)",
             }}
           >
             <img
@@ -186,36 +178,54 @@ export function AvatarSetup() {
             />
           </div>
 
-          {/* Controls */}
-          <div style={{ display: "grid", gap: 16, minWidth: 280, alignContent: "start" }}>
-            <PanelSection icon="🎨" title="Scrubs color">
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                {SCRUB_COLORS.map((c) => (
+          <div
+            style={{
+              width: "min(92vw, 420px)",
+              background: "rgba(20,16,31,0.72)",
+              border: `2px solid ${palette.deepViolet}`,
+              borderRadius: 12,
+              padding: "16px 18px",
+              textAlign: "center",
+            }}
+          >
+            <h2
+              style={{
+                fontSize: 14,
+                margin: "0 0 2px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+              }}
+            >
+              <span aria-hidden>🎨</span> Scrubs color
+            </h2>
+            <p style={{ margin: "0 0 14px", fontSize: 12, opacity: 0.65 }}>{selectedColor.label}</p>
+            <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+              {SCRUB_COLORS.map((c) => {
+                const selected = config.scrubColorId === c.id;
+                return (
                   <button
                     key={c.id}
                     title={c.label}
+                    aria-label={c.label}
+                    aria-pressed={selected}
                     onClick={() => setConfig((cfg) => ({ ...cfg, scrubColorId: c.id }))}
                     style={{
-                      width: 36,
-                      height: 36,
+                      width: 40,
+                      height: 40,
                       borderRadius: "50%",
                       background: c.swatch,
-                      border: `3px solid ${config.scrubColorId === c.id ? palette.white : palette.deepViolet}`,
+                      border: `3px solid ${selected ? palette.white : palette.deepViolet}`,
+                      boxShadow: selected ? `0 0 0 3px ${palette.amethyst}` : "none",
+                      transform: selected ? "scale(1.08)" : "none",
+                      transition: "transform 120ms ease, box-shadow 120ms ease",
                       cursor: "pointer",
                     }}
                   />
-                ))}
-              </div>
-            </PanelSection>
-
-            <PanelSection icon="🥼" title="Coat">
-              <PixelButton
-                variant={config.coatOn ? "primary" : "danger"}
-                onClick={() => setConfig((c) => ({ ...c, coatOn: !c.coatOn }))}
-              >
-                {config.coatOn ? "Coat on" : "Coat off"}
-              </PixelButton>
-            </PanelSection>
+                );
+              })}
+            </div>
           </div>
         </div>
 

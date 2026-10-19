@@ -1,6 +1,14 @@
 // Avatar Setup (S03, FR-90) options. Kept separate from characters.ts
 // (login identity) since this is purely cosmetic data, not account data.
 //
+// The coat toggle (scrubs-only vs. scrubs+coat) that used to sit alongside
+// scrub color was removed on request - each color option was a pre-
+// generated scrubs/coat sprite pair specifically so the coat toggle could
+// exist without live layer compositing; removing the toggle meant
+// dropping the coat half of every pair, not just hiding a button (see
+// `images` below - was `Record<CharacterId, { scrubs: string; coat:
+// string }>`, now just `Record<CharacterId, string>`).
+//
 // Scope note on "scrubs color": FR-90 says players choose a scrubs color,
 // which implies live recoloring. The actual base art is a single flat
 // composited image (body + clothes + shading baked together), so a CSS
@@ -8,9 +16,8 @@
 // scrubs - not acceptable. True "just recolor the clothing" needs the
 // clothing rendered as its own masked layer, which isn't how this art was
 // generated. Rather than hack a masking pipeline together, each scrub
-// color is its own pre-generated sprite pair (scrubs-only + scrubs+coat),
-// same approach as the coat toggle itself - higher quality, much simpler
-// to build, at the cost of needing a new generation per color.
+// color is its own pre-generated sprite - higher quality, much simpler to
+// build, at the cost of needing a new generation per color.
 //
 // The Lounge's in-game PlayableCharacter sprite is a different story -
 // it only ever had the one gray sheet, pre-generating a color pair per
@@ -37,7 +44,7 @@ export interface ScrubColorOption {
   id: string;
   label: string;
   swatch: string; // CSS color for the picker swatch itself
-  images: Record<CharacterId, { scrubs: string; coat: string }>;
+  images: Record<CharacterId, string>;
 }
 
 export const SCRUB_COLORS: ScrubColorOption[] = [
@@ -46,8 +53,8 @@ export const SCRUB_COLORS: ScrubColorOption[] = [
     label: "Classic",
     swatch: "#D8D4DC",
     images: {
-      lakshmi: { scrubs: "/characters/lakshmi-scrubs.png", coat: "/characters/lakshmi-coat.png" },
-      surya: { scrubs: "/characters/surya-scrubs.png", coat: "/characters/surya-coat.png" },
+      lakshmi: "/characters/lakshmi-scrubs.png",
+      surya: "/characters/surya-scrubs.png",
     },
   },
   {
@@ -55,8 +62,8 @@ export const SCRUB_COLORS: ScrubColorOption[] = [
     label: "Lilac",
     swatch: "#DEC9E9",
     images: {
-      lakshmi: { scrubs: "/characters/lakshmi-scrubs-lilac.png", coat: "/characters/lakshmi-coat-lilac.png" },
-      surya: { scrubs: "/characters/surya-scrubs-lilac.png", coat: "/characters/surya-coat-lilac.png" },
+      lakshmi: "/characters/lakshmi-scrubs-lilac.png",
+      surya: "/characters/surya-scrubs-lilac.png",
     },
   },
   {
@@ -64,8 +71,8 @@ export const SCRUB_COLORS: ScrubColorOption[] = [
     label: "Amethyst",
     swatch: "#A06CD5",
     images: {
-      lakshmi: { scrubs: "/characters/lakshmi-scrubs-amethyst.png", coat: "/characters/lakshmi-coat-amethyst.png" },
-      surya: { scrubs: "/characters/surya-scrubs-amethyst.png", coat: "/characters/surya-coat-amethyst.png" },
+      lakshmi: "/characters/lakshmi-scrubs-amethyst.png",
+      surya: "/characters/surya-scrubs-amethyst.png",
     },
   },
   {
@@ -73,8 +80,8 @@ export const SCRUB_COLORS: ScrubColorOption[] = [
     label: "Coral",
     swatch: "#FF7A7A",
     images: {
-      lakshmi: { scrubs: "/characters/lakshmi-scrubs-coral.png", coat: "/characters/lakshmi-coat-coral.png" },
-      surya: { scrubs: "/characters/surya-scrubs-coral.png", coat: "/characters/surya-coat-coral.png" },
+      lakshmi: "/characters/lakshmi-scrubs-coral.png",
+      surya: "/characters/surya-scrubs-coral.png",
     },
   },
   {
@@ -82,8 +89,8 @@ export const SCRUB_COLORS: ScrubColorOption[] = [
     label: "Mint",
     swatch: "#8FE3B0",
     images: {
-      lakshmi: { scrubs: "/characters/lakshmi-scrubs-mint.png", coat: "/characters/lakshmi-coat-mint.png" },
-      surya: { scrubs: "/characters/surya-scrubs-mint.png", coat: "/characters/surya-coat-mint.png" },
+      lakshmi: "/characters/lakshmi-scrubs-mint.png",
+      surya: "/characters/surya-scrubs-mint.png",
     },
   },
   {
@@ -91,8 +98,8 @@ export const SCRUB_COLORS: ScrubColorOption[] = [
     label: "Butter",
     swatch: "#FFE08A",
     images: {
-      lakshmi: { scrubs: "/characters/lakshmi-scrubs-butter.png", coat: "/characters/lakshmi-coat-butter.png" },
-      surya: { scrubs: "/characters/surya-scrubs-butter.png", coat: "/characters/surya-coat-butter.png" },
+      lakshmi: "/characters/lakshmi-scrubs-butter.png",
+      surya: "/characters/surya-scrubs-butter.png",
     },
   },
   {
@@ -100,29 +107,27 @@ export const SCRUB_COLORS: ScrubColorOption[] = [
     label: "Sky Blue",
     swatch: "#7EC8E3",
     images: {
-      lakshmi: { scrubs: "/characters/lakshmi-scrubs-skyblue.png", coat: "/characters/lakshmi-coat-skyblue.png" },
-      surya: { scrubs: "/characters/surya-scrubs-skyblue.png", coat: "/characters/surya-coat-skyblue.png" },
+      lakshmi: "/characters/lakshmi-scrubs-skyblue.png",
+      surya: "/characters/surya-scrubs-skyblue.png",
     },
   },
 ];
 
 export interface AvatarConfig {
   scrubColorId: string;
-  coatOn: boolean;
 }
 
 export const DEFAULT_AVATAR_CONFIG: AvatarConfig = {
   scrubColorId: "classic-gray",
-  coatOn: false,
 };
 
-/** The actual sprite for a character's confirmed look - same coat/scrubs
- * lookup Avatar Setup's own preview uses, pulled out here so anywhere else
- * that wants to show "how this person currently looks" (the Lounge's
- * profile button) doesn't duplicate it. */
+/** The actual sprite for a character's confirmed look - same lookup
+ * Avatar Setup's own preview uses, pulled out here so anywhere else that
+ * wants to show "how this person currently looks" (the Lounge's profile
+ * button) doesn't duplicate it. */
 export function getAvatarSpriteSrc(characterId: CharacterId, config: AvatarConfig): string {
   const scrubColor = SCRUB_COLORS.find((c) => c.id === config.scrubColorId) ?? SCRUB_COLORS[0]!;
-  return config.coatOn ? scrubColor.images[characterId].coat : scrubColor.images[characterId].scrubs;
+  return scrubColor.images[characterId];
 }
 
 function storageKey(characterId: CharacterId): string {

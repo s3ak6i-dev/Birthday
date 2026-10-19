@@ -281,7 +281,7 @@ function ProfileSection({
       {status === "error" && (
         <p style={{ margin: "6px 0 0", fontSize: 12, color: palette.coral }}>Couldn't save that - try again.</p>
       )}
-      <SettingRow label="Avatar" description="Scrubs color, coat, and sprite.">
+      <SettingRow label="Avatar" description="Scrubs color and sprite.">
         <Link to="/avatar">
           <PixelButton style={{ padding: "6px 12px", minHeight: 0 }}>Edit avatar</PixelButton>
         </Link>
