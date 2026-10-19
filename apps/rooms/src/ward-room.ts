@@ -194,6 +194,13 @@ export class WardRoom extends Server<Env> {
     await this.#saveRoom(room);
 
     this.#broadcastRoomState(room);
+    // Debug logging for "stuck on Waiting for the other person" /
+    // "Loading the board" reports (via `wrangler tail`) - temporary,
+    // remove once the root cause is actually found. Not guessing at this
+    // one without seeing what onConnect actually observes live.
+    console.log(
+      `[onConnect] userId=${userId} room.phase=${room.phase} gameState=${room.gameState === null ? "null" : "present"} willBroadcastGameState=${room.phase === "playing" && room.gameState !== null}`
+    );
     if (room.phase === "playing" && room.gameState !== null) {
       this.#broadcastGameState(room);
     }
@@ -236,12 +243,16 @@ export class WardRoom extends Server<Env> {
           // the DO to hibernate mid-countdown.
           setTimeout(async () => {
             const freshRoom = await this.#loadRoom();
-            if (freshRoom.phase !== "countdown") return; // someone left during the countdown
+            if (freshRoom.phase !== "countdown") {
+              console.log(`[countdown] aborted - freshRoom.phase was "${freshRoom.phase}", not "countdown"`);
+              return; // someone left during the countdown
+            }
             freshRoom.phase = "playing";
             const [p1, p2] = freshRoom.players;
             const engine = GAME_ENGINES[freshRoom.game!];
             freshRoom.gameState = engine.init([p1!, p2!], initOptionsFor(freshRoom.game!, freshRoom.mode));
             await this.#saveRoom(freshRoom);
+            console.log(`[countdown] fired, game=${freshRoom.game} mode=${freshRoom.mode} initial state=${JSON.stringify(freshRoom.gameState)}`);
             this.#broadcastRoomState(freshRoom);
             this.#broadcastGameState(freshRoom);
           }, ROOM.countdownSeconds * 1000);
@@ -271,6 +282,7 @@ export class WardRoom extends Server<Env> {
         try {
           room.gameState = engine.reduce(room.gameState, parsed.payload, userId);
         } catch (err) {
+          console.log(`[action] userId=${userId} payload=${JSON.stringify(parsed.payload)} REJECTED: ${err instanceof Error ? err.message : err}`);
           this.#sendError(connection, err instanceof Error ? err.message : "That move isn't allowed right now.");
           return;
         }
@@ -279,6 +291,13 @@ export class WardRoom extends Server<Env> {
           room.phase = "done";
         }
         await this.#saveRoom(room);
+        // Same temporary debug logging as onConnect above - a redacted
+        // snapshot of post-reduce state, specifically to catch a duel
+        // setSecretWord that both players apparently completed but one or
+        // both got stuck seeing "Waiting for the other person" anyway.
+        console.log(
+          `[action] userId=${userId} payload=${JSON.stringify(parsed.payload)} ACCEPTED, new state=${JSON.stringify(room.gameState)}`
+        );
         this.#broadcastGameState(room);
         if (room.phase === "done") this.#broadcastRoomState(room);
         return;
