@@ -11,6 +11,7 @@
 import type { GuessCard } from "./games/guess-the-diagnosis/types";
 import type { TriageSpectrumCard } from "./games/triage-dial/types";
 import type { WordleEntry } from "./games/wordle/types";
+import type { CodeRedScenarioRuntime } from "./games/code-red/types";
 
 export const PLACEHOLDER_DECK: GuessCard[] = [
   { id: "1", name: "Common cold", specialty: "General", tags: ["cough", "fatigue"] },
@@ -111,3 +112,37 @@ export const PLACEHOLDER_ENTRIES: WordleEntry[] = [
   { word: "PLACENTA", definition: "The organ that nourishes a fetus during pregnancy", pack: "OB-GYN", source: "placeholder" },
   { word: "HOSPITAL", definition: "A facility where patients receive medical care", pack: "General", source: "placeholder" },
 ];
+
+// Code Red (FR-60..69). Structural skeleton only, matching one of the 3
+// launch scenario picks already drafted in masterdoc.md FR-68 (postpartum
+// hemorrhage) - enough shape to actually exercise init()/the room board
+// against, NOT a clinically reviewed scenario. This is exactly the piece
+// flagged in this project's own conversation as Lakshmi's to write/correct
+// (she's the MBBS student; a vitals timeline and "correct sequence" that
+// are actually wrong would be a real problem here, not a cosmetic one) -
+// do not treat the numbers or sequence below as medically accurate, and
+// don't ship this as the real pack.
+export const PLACEHOLDER_CODE_RED_SCENARIO: CodeRedScenarioRuntime = {
+  id: "pph-placeholder",
+  vitalsTimeline: [
+    { atSecond: 0, hr: 108, bpSystolic: 104, bpDiastolic: 68, spo2: 97, bloodLossMl: 300 },
+    { atSecond: 45, hr: 122, bpSystolic: 92, bpDiastolic: 60, spo2: 96, bloodLossMl: 600 },
+    { atSecond: 90, hr: 138, bpSystolic: 80, bpDiastolic: 50, spo2: 94, bloodLossMl: 900 },
+    { atSecond: 150, hr: 152, bpSystolic: 68, bpDiastolic: 42, spo2: 91, bloodLossMl: 1300 },
+    { atSecond: 220, hr: 165, bpSystolic: 58, bpDiastolic: 35, spo2: 88, bloodLossMl: 1700 },
+  ],
+  examineFindings: [
+    { regionId: "fundus", text: "Uterus feels soft and boggy, not well contracted." },
+    { regionId: "perineum", text: "Steady trickle of bright red blood, pad soaked in under 5 minutes." },
+    { regionId: "iv-site", text: "18G line already in place from delivery." },
+  ],
+  orderOptions: [
+    { id: "call-for-help", label: "Call for help / escalate" },
+    { id: "uterine-massage", label: "Bimanual uterine massage" },
+    { id: "oxytocin", label: "IV oxytocin" },
+    { id: "iv-fluids", label: "Start rapid IV fluids" },
+    { id: "catheterize", label: "Insert urinary catheter" },
+    { id: "blood-bank", label: "Call blood bank / crossmatch" },
+  ],
+  correctSequence: ["call-for-help", "uterine-massage", "oxytocin", "iv-fluids", "blood-bank"],
+};

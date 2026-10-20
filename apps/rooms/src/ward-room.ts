@@ -11,6 +11,7 @@
 import { Server, type Connection, type WSMessage } from "partyserver";
 import {
   GAME_ENGINES,
+  PLACEHOLDER_CODE_RED_SCENARIO,
   PLACEHOLDER_DECK,
   PLACEHOLDER_ENTRIES,
   PLACEHOLDER_SPECTRUMS,
@@ -79,6 +80,11 @@ function initOptionsFor(game: GameId, mode: string | null) {
         entries: PLACEHOLDER_ENTRIES,
         istDate: todayIST(),
       };
+    case "code-red":
+      // PLACEHOLDER_CODE_RED_SCENARIO is a structural skeleton, not a
+      // clinically reviewed scenario (see its own header comment) - fine
+      // to exercise the room/engine against, not what ships for real.
+      return { scenario: PLACEHOLDER_CODE_RED_SCENARIO };
     default:
       return {};
   }
