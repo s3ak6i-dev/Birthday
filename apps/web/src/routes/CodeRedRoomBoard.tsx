@@ -207,10 +207,28 @@ export function CodeRedRoomBoard({ room, labelFor: _labelFor }: { room: RoomHand
 
   const timeRemaining = Math.max(0, view.timeLimitSeconds - view.elapsedSeconds);
   const roleLabel = view.role === "bedside" ? "Bedside" : "Protocol";
+  // Two different backgrounds, not one shared board image like the other
+  // three games - FR-63's whole premise is that Bedside and Protocol are
+  // in two different physical spots, so the one thing every other board
+  // gets to assume (both players are looking at the same scene) doesn't
+  // hold here. Same background for every phase (briefing/live/debrief) -
+  // role is already known at briefing, no reason to pick a third "neutral"
+  // background just for that screen.
+  const boardImage = view.role === "bedside" ? "/code_red_board_bedside.png" : "/code_red_board_protocol.png";
 
   return (
     <main style={{ position: "relative", minHeight: "100vh", color: palette.white, padding: 16 }}>
-      <div style={{ position: "absolute", inset: 0, background: palette.ink, zIndex: 0 }} />
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          backgroundImage: `url(${boardImage})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          zIndex: 0,
+        }}
+      />
+      <div style={{ position: "absolute", inset: 0, background: "rgba(20,16,31,0.6)", zIndex: 0 }} />
 
       <div
         style={{
