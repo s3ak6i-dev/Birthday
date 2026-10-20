@@ -124,6 +124,11 @@ export const PLACEHOLDER_ENTRIES: WordleEntry[] = [
 // don't ship this as the real pack.
 export const PLACEHOLDER_CODE_RED_SCENARIO: CodeRedScenarioRuntime = {
   id: "pph-placeholder",
+  title: "Postpartum Hemorrhage (placeholder)",
+  briefing:
+    "30 minutes after a normal vaginal delivery, the patient is bleeding more than expected. You have 5 minutes to stabilize her.",
+  debriefNotes:
+    "PLACEHOLDER - not a reviewed teaching note. The real version needs a cited source (e.g. WHO PPH guidelines, Williams Obstetrics) per masterdoc.md FR-69/FR-CNT-1.",
   vitalsTimeline: [
     { atSecond: 0, hr: 108, bpSystolic: 104, bpDiastolic: 68, spo2: 97, bloodLossMl: 300 },
     { atSecond: 45, hr: 122, bpSystolic: 92, bpDiastolic: 60, spo2: 96, bloodLossMl: 600 },

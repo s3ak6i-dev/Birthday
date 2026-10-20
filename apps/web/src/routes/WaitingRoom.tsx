@@ -10,11 +10,11 @@
 //
 // Once the room's phase moves to "playing"/"done" this renders the
 // game's real board instead of the lobby. Guess the Diagnosis, Triage
-// Dial, and Wordle all have real room boards now (GuessTheDiagnosisRoomBoard/
-// TriageDialRoomBoard/WordleRoomBoard) - Code Red and Case Files still only
-// have engine stubs with no board at all (TODO.md M2/M3), so this says so
-// plainly rather than silently falling back to something that isn't
-// actually multiplayer.
+// Dial, Wordle, and now Code Red all have real room boards
+// (GuessTheDiagnosisRoomBoard/TriageDialRoomBoard/WordleRoomBoard/
+// CodeRedRoomBoard) - Case Files still only has an engine stub with no
+// board at all (TODO.md M6), so this says so plainly rather than silently
+// falling back to something that isn't actually multiplayer.
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { PixelButton, palette } from "@ward-games/ui";
@@ -27,6 +27,7 @@ import { sfxCountdownGo, sfxCountdownTick, sfxReactionPop } from "../lib/sfx";
 import { GuessTheDiagnosisRoomBoard } from "./GuessTheDiagnosisRoomBoard";
 import { TriageDialRoomBoard } from "./TriageDialRoomBoard";
 import { WordleRoomBoard } from "./WordleRoomBoard";
+import { CodeRedRoomBoard } from "./CodeRedRoomBoard";
 import { GAME_META_BY_ID } from "../lib/game-meta";
 
 const GAME_LABEL: Record<GameId, string> = {
@@ -180,6 +181,8 @@ export function WaitingRoom() {
         <TriageDialRoomBoard room={room} labelFor={labelFor} />
       ) : game === "wordle" ? (
         <WordleRoomBoard room={room} labelFor={labelFor} />
+      ) : game === "code-red" ? (
+        <CodeRedRoomBoard room={room} labelFor={labelFor} />
       ) : null;
 
     if (board) {

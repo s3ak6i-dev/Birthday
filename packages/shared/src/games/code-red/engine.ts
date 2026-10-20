@@ -210,23 +210,40 @@ export const codeRedEngine: GameEngine<CodeRedState, CodeRedAction, CodeRedRedac
       timeLimitSeconds: state.timeLimitSeconds,
       errors: state.errors,
       lastRadioPhrase: state.lastRadioPhrase,
+      // The non-secret half of the scenario (title/briefing/examine
+      // regions/order options) - same for both roles, every phase. Never
+      // includes correctSequence - see this field's own doc comment.
+      scenario: {
+        title: state.scenario.title,
+        briefing: state.scenario.briefing,
+        examineFindings: state.scenario.examineFindings,
+        orderOptions: state.scenario.orderOptions,
+      },
     };
 
     if (state.phase === "debrief") {
-      // FR-69: full picture shown to both once it's over. Note this still
-      // never includes state.scenario.correctSequence itself - the client
-      // shows "here's what you applied, in order" plus (from its own
-      // static copy of the scenario content) what the correct sequence
-      // was; the server doesn't need to re-send the answer key as part of
-      // room state for that to work.
-      return { ...base, vitals: state.vitals, ordersApplied: state.ordersApplied, outcome: state.outcome, stars: state.stars };
+      // FR-69: full picture shown to both once it's over, INCLUDING the
+      // real correct sequence now that there's nothing left to protect by
+      // withholding it - "the full correct sequence, where the pair
+      // diverged" is the spec's own wording, not just "what you applied."
+      return {
+        ...base,
+        vitals: state.vitals,
+        debrief: {
+          ordersApplied: state.ordersApplied,
+          correctSequence: state.scenario.correctSequence,
+          outcome: state.outcome,
+          stars: state.stars,
+          debriefNotes: state.scenario.debriefNotes,
+        },
+      };
     }
 
     // FR-63: live play stays split - each role only gets its own half.
     // Bedside never receives state.scenario (which holds correctSequence)
     // at all via this path, satisfying FR-64's "validated server-side".
     return role === "bedside"
-      ? { ...base, vitals: state.vitals, findingsRevealed: state.findingsRevealed }
+      ? { ...base, vitals: state.vitals, findingsRevealed: state.findingsRevealed, ordersApplied: state.ordersApplied }
       : { ...base, pinnedCards: state.pinnedCards };
   },
 

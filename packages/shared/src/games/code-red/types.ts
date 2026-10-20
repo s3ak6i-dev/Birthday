@@ -37,6 +37,15 @@ export interface CodeRedScenarioRuntime {
   examineFindings: { regionId: string; text: string }[];
   orderOptions: CodeRedOrder[];
   correctSequence: string[]; // order ids, in the required sequence - FR-64
+  /** Display-only - the engine itself never reads these, so they're
+   * optional here rather than forcing every caller (e.g. engine tests'
+   * minimal fixtures) to invent flavor text just to satisfy the type. The
+   * real content schema (packages/content/src/schemas/code-red.ts)
+   * requires all three; this type is intentionally the smaller "what the
+   * engine needs" shape a full CodeRedScenarioContent still satisfies. */
+  title?: string;
+  briefing?: string;
+  debriefNotes?: string;
 }
 
 export interface CodeRedState {
@@ -85,13 +94,32 @@ export interface CodeRedRedactedState {
   timeLimitSeconds: number;
   errors: number;
   lastRadioPhrase: CodeRedState["lastRadioPhrase"];
-  /** Bedside-only while live. */
+  /** The non-secret half of the scenario - title/briefing text, the
+   * examinable regions, and the order options - same for both roles,
+   * every phase. `correctSequence` is NOT here: it's the one genuinely
+   * secret field (FR-64: validated server-side, never trust the client
+   * with it while "live"), so it only ever rides along inside the
+   * `debrief` object below, once the scenario is actually over and FR-69
+   * explicitly calls for showing it ("the full correct sequence, where
+   * the pair diverged"). */
+  scenario: { title?: string; briefing?: string; examineFindings: { regionId: string; text: string }[]; orderOptions: CodeRedOrder[] };
+  /** Bedside-only while live - their own progress so far (not secret from
+   * Bedside itself, just from Protocol - FR-63 is about the two roles not
+   * seeing *each other's* screen, not Bedside forgetting its own clicks). */
   vitals?: VitalsSnapshot;
   findingsRevealed?: string[];
+  ordersApplied?: string[];
   /** Protocol-only while live. */
   pinnedCards?: string[];
-  /** Visible to both once phase is "debrief" (FR-69) - undefined before then. */
-  ordersApplied?: string[];
-  outcome?: CodeRedOutcome | null;
-  stars?: CodeRedState["stars"];
+  /** Only present once phase is "debrief" (FR-69) - what was actually
+   * applied, the real correct sequence (safe to reveal now that the
+   * scenario is over), the outcome/star score, and the sourced teaching
+   * note. */
+  debrief?: {
+    ordersApplied: string[];
+    correctSequence: string[];
+    outcome: CodeRedOutcome | null;
+    stars: CodeRedState["stars"];
+    debriefNotes?: string;
+  };
 }

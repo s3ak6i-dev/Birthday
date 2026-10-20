@@ -241,8 +241,9 @@ describe("redact", () => {
     expect(bedsideView.role).toBe("bedside");
     expect(bedsideView.vitals).toEqual(state.vitals);
     expect(bedsideView.findingsRevealed).toEqual(["abdomen"]);
+    expect(bedsideView.ordersApplied).toEqual([]); // Bedside sees its own progress live, just not Protocol's
     expect(bedsideView.pinnedCards).toBeUndefined();
-    expect(bedsideView.ordersApplied).toBeUndefined(); // not revealed until debrief
+    expect(bedsideView.debrief).toBeUndefined(); // not revealed until debrief
 
     const protocolView = codeRedEngine.redact(state, P2);
     expect(protocolView.role).toBe("protocol");
@@ -251,7 +252,20 @@ describe("redact", () => {
     expect(protocolView.findingsRevealed).toBeUndefined();
   });
 
-  it("at debrief, both roles see the full outcome/orders/stars", () => {
+  it("exposes the non-secret scenario structure (title/briefing/examine regions/order options) to both roles, but never the correct-sequence answer key while live", () => {
+    let state = freshState({ [P1]: "bedside", [P2]: "protocol" });
+    state = codeRedEngine.reduce(state, { type: "startLive" }, P1);
+
+    for (const player of [P1, P2]) {
+      const live = codeRedEngine.redact(state, player);
+      expect(live.scenario.examineFindings).toEqual(TEST_SCENARIO.examineFindings);
+      expect(live.scenario.orderOptions).toEqual(TEST_SCENARIO.orderOptions);
+      expect(live.debrief).toBeUndefined();
+      expect(JSON.stringify(live)).not.toContain("correctSequence");
+    }
+  });
+
+  it("at debrief, both roles see the full outcome/orders/stars AND the real correct sequence (FR-69) - safe to reveal now it's over", () => {
     let state = freshState({ [P1]: "bedside", [P2]: "protocol" });
     state = codeRedEngine.reduce(state, { type: "startLive" }, P1);
     state = codeRedEngine.reduce(state, { type: "applyOrder", orderId: "o1" }, P1);
@@ -261,9 +275,10 @@ describe("redact", () => {
 
     for (const player of [P1, P2]) {
       const view = codeRedEngine.redact(state, player);
-      expect(view.outcome).toBe("success");
-      expect(view.ordersApplied).toEqual(["o1", "o2", "o3"]);
-      expect(view.stars).toBe(3);
+      expect(view.debrief?.outcome).toBe("success");
+      expect(view.debrief?.ordersApplied).toEqual(["o1", "o2", "o3"]);
+      expect(view.debrief?.correctSequence).toEqual(TEST_SCENARIO.correctSequence);
+      expect(view.debrief?.stars).toBe(3);
     }
   });
 });
