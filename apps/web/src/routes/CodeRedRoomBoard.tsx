@@ -19,13 +19,23 @@
 // already established for frequent updates.
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { DialogueScene, PixelButton, palette } from "@ward-games/ui";
+import { DialogueScene, PixelButton, palette, playLoopingSound } from "@ward-games/ui";
 import type { CodeRedAction, CodeRedOrder, CodeRedRedactedState } from "@ward-games/shared";
 import type { RoomHandle } from "../lib/use-room";
 import { CODE_RED_TUTORIAL } from "./code-red-tutorial";
 import { GYNA_PORTRAITS } from "../lib/gyna-portraits";
 import { recordGameResult, unlockSticker } from "../lib/progress";
-import { GYNA_SQUAWK_KEY, GYNA_TYPE_KEY, sfxConfirm, sfxError, sfxLockIn, sfxLose, sfxStickerUnlock, sfxWin } from "../lib/sfx";
+import {
+  CODE_RED_HEART_MONITOR_KEY,
+  GYNA_SQUAWK_KEY,
+  GYNA_TYPE_KEY,
+  sfxConfirm,
+  sfxError,
+  sfxLockIn,
+  sfxLose,
+  sfxStickerUnlock,
+  sfxWin,
+} from "../lib/sfx";
 import { ChatPanel } from "../components/ChatPanel";
 
 const TUTORIAL_SEEN_KEY = "ward-games:tutorial-seen:code-red";
@@ -120,6 +130,16 @@ export function CodeRedRoomBoard({ room, labelFor: _labelFor }: { room: RoomHand
     }, TICK_INTERVAL_MS);
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- dispatch is stable (closes over room, not state)
+  }, [view?.phase]);
+
+  // Ambient heart-monitor loop for the duration of "live" - plays for both
+  // roles (Protocol's in the same room on a call, not literally deaf to
+  // the monitor beeping just because it's not their screen), stops the
+  // instant phase moves on so debrief doesn't play over it.
+  useEffect(() => {
+    if (!view || view.phase !== "live") return;
+    const stop = playLoopingSound(CODE_RED_HEART_MONITOR_KEY);
+    return () => stop();
   }, [view?.phase]);
 
   // Order-attempt feedback: the engine never throws for a wrong-but-legal

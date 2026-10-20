@@ -46,6 +46,10 @@ export function initSfx(): void {
   registerSound("dog-tap", src("dog-tap"), { volume: 0.5 });
   registerSound("gyna-squawk", src("gyna-squawk"), { volume: 0.45 });
   registerSound("gyna-type", src("gyna-type"), { volume: 0.35 });
+  // Quiet - this loops continuously for the whole "live" phase (Code Red),
+  // meant to sit under conversation and the rest of the UI's sounds, not
+  // compete with them the way a one-shot sfx briefly can.
+  registerSound("heart-monitor", src("heart-monitor"), { volume: 0.22 });
 }
 
 // Global UI (PixelButton/IconButton/Hotspot already play "click"/nothing
@@ -99,3 +103,11 @@ export const GYNA_SQUAWK_KEY = "gyna-squawk";
 // `<DialogueScene>` call sites, plays for as long as a line is actively
 // revealing.
 export const GYNA_TYPE_KEY = "gyna-type";
+
+// Code Red's ambient heart-monitor loop - CodeRedRoomBoard.tsx passes this
+// straight to `playLoopingSound` (the same mechanism GYNA_TYPE_KEY above
+// uses) for the duration of the scenario's "live" phase, same as every
+// other loop key in this file being a bare string constant rather than a
+// play-once wrapper function, since looping sounds need their own stop
+// handle back from the caller, not a fire-and-forget call.
+export const CODE_RED_HEART_MONITOR_KEY = "heart-monitor";
