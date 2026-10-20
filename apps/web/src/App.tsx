@@ -7,6 +7,7 @@ import { GuessTheDiagnosisBoard } from "./routes/GuessTheDiagnosisBoard";
 import { WaitingRoom } from "./routes/WaitingRoom";
 import { TriageDialIntro } from "./routes/TriageDialIntro";
 import { TriageDialBoard } from "./routes/TriageDialBoard";
+import { CodeRedIntro } from "./routes/CodeRedIntro";
 import { WordleIntro } from "./routes/WordleIntro";
 import { WordleBoard } from "./routes/WordleBoard";
 import { GamesList } from "./routes/GamesList";
@@ -26,6 +27,7 @@ export default function App() {
         <Route path="/g/guess-the-diagnosis/play" element={<GuessTheDiagnosisBoard />} />
         <Route path="/g/triage-dial" element={<TriageDialIntro />} />
         <Route path="/g/triage-dial/play" element={<TriageDialBoard />} />
+        <Route path="/g/code-red" element={<CodeRedIntro />} />
         {/* Wordle is the one game masterdoc.md gives its own top-level route
             (S16/S17: `/wordle`, not `/g/wordle`) rather than routing it
             through the generic `/g/:game` namespace like the others. A
