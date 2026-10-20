@@ -57,7 +57,7 @@ export const GAME_META: GameMeta[] = [
     name: "Code Red",
     tagline: "Bedside emergencies, roles, and a protocol binder under the clock.",
     introRoute: "/g/code-red",
-    live: false,
+    live: true,
     players: "2 players",
     category: "Rapid decision-making",
   },

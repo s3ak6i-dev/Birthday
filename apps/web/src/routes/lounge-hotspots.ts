@@ -141,7 +141,7 @@ export const LOUNGE_HOTSPOTS: LoungeHotspot[] = [
     id: "door",
     label: "Code Red",
     game: "code-red",
-    locked: true,
+    locked: false,
     left: 89,
     top: 14,
     width: 11,
