@@ -14,7 +14,7 @@
 // see that file's header comment for what "wiring them in" would mean for
 // each one.
 import { useEffect, useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   PixelButton,
   SettingsIcon,
@@ -47,6 +47,7 @@ import {
 } from "../lib/settings";
 
 export function Settings() {
+  const navigate = useNavigate();
   const [selfUserId, setSelfUserId] = useState<string | null>(null);
   const [selfEmail, setSelfEmail] = useState<string | null>(null);
   const { byId: profileNameById, loading: profilesLoading } = useProfiles();
@@ -59,6 +60,18 @@ export function Settings() {
   }, []);
 
   const selfCharacter = characterForEmail(selfEmail);
+
+  // D8: exactly two fixed accounts, picked by tapping a character on the
+  // Lounge rather than typing credentials - so "wrong account signed in
+  // on this device" (e.g. testing on a shared/borrowed phone) has no self-
+  // service fix anywhere else in the app. Signing out just clears the
+  // Supabase session and sends this device back to that same picker,
+  // where the right person taps their own name - no separate "log back
+  // in" flow to build, the picker already exists on the Lounge.
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+    navigate("/");
+  }
 
   return (
     <main style={{ padding: "28px 24px 56px", color: palette.white, background: palette.ink, minHeight: "100vh" }}>
@@ -80,6 +93,8 @@ export function Settings() {
           selfUserId={selfUserId}
           currentName={selfUserId ? (profileNameById[selfUserId] ?? selfCharacter?.label) : undefined}
           loading={profilesLoading}
+          signedInAs={selfCharacter?.label}
+          onSignOut={handleSignOut}
         />
         <SoundSection />
         <AccessibilitySection />
@@ -221,10 +236,14 @@ function ProfileSection({
   selfUserId,
   currentName,
   loading,
+  signedInAs,
+  onSignOut,
 }: {
   selfUserId: string | null;
   currentName: string | undefined;
   loading: boolean;
+  signedInAs: string | undefined;
+  onSignOut: () => void;
 }) {
   const [draft, setDraft] = useState("");
   const [initialized, setInitialized] = useState(false);
@@ -285,6 +304,14 @@ function ProfileSection({
         <Link to="/avatar">
           <PixelButton style={{ padding: "6px 12px", minHeight: 0 }}>Edit avatar</PixelButton>
         </Link>
+      </SettingRow>
+      <SettingRow
+        label="Account"
+        description={signedInAs ? `Signed in as ${signedInAs} on this device.` : "Not signed in."}
+      >
+        <PixelButton variant="danger" onClick={onSignOut} style={{ padding: "6px 12px", minHeight: 0 }}>
+          Sign out
+        </PixelButton>
       </SettingRow>
     </SettingsCard>
   );
