@@ -8,6 +8,7 @@
 // deliberately close to what that pipeline will eventually hand the player,
 // so swapping the data source later shouldn't require touching this file.
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { palette } from "../tokens";
 import { PortraitPlaceholder } from "./PortraitPlaceholder";
 import { PixelButton } from "./PixelButton";
@@ -152,7 +153,7 @@ export function DialogueScene({
     }
   }
 
-  return (
+  return createPortal(
     <div
       role="dialog"
       aria-label="Scene"
@@ -160,7 +161,25 @@ export function DialogueScene({
       style={{
         position: "fixed",
         inset: 0,
-        zIndex: 50,
+        // Was 50 - a plain sibling in whatever page renders this loses a
+        // z-index fight against anything in that page with a higher one
+        // of its own, `position: fixed` or not (fixed changes layout/
+        // containing-block, not stacking order). The Lounge's own
+        // PlayableCharacter depth-sorts up to ~920 and its sit button
+        // claims 1000 - both painted straight over Gyna's intro dialogue
+        // here, letting the already-seated character and "Stand up"
+        // button show through what should have been a full-screen
+        // takeover (caught live: a real screenshot of the Lounge's own
+        // background and character visible behind the dialogue box,
+        // instead of the intro's own background art). Every other
+        // DialogueScene usage (tutorials) happens to live on a page that
+        // never renders PlayableCharacter at all, so this exact
+        // combination had never actually been exercised before. Portaled
+        // to document.body (same fix as ChatPanel.tsx's own stacking-
+        // context bug earlier) so this always wins regardless of
+        // whatever the host page's own z-indices happen to be, not just
+        // tuned to beat today's highest one.
+        zIndex: 1100,
         background: background ?? palette.nightViolet,
         display: "flex",
         flexDirection: "column",
@@ -233,6 +252,7 @@ export function DialogueScene({
           {fullyShown ? (lineIndex + 1 >= lines.length ? "tap to continue ›" : "tap to continue ›") : "tap to skip ahead"}
         </p>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
